@@ -4,6 +4,12 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>BYT Transport — Management System</title>
+<link rel="manifest" href="manifest.json"/>
+<meta name="theme-color" content="#1a3a5c"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="BYT Transport"/>
+<link rel="apple-touch-icon" href="icons/icon-192.png"/>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -957,6 +963,20 @@ function App(){
   const [parts,setParts]=useState(()=>load("parts"));
   const [insurance,setInsurance]=useState(()=>load("insurance"));
   const [logs,setLogs]=useState(()=>load("logs"));
+  const [installPrompt,setInstallPrompt]=useState(null);
+  const [installDismissed,setInstallDismissed]=useState(false);
+
+  useEffect(()=>{
+    const handler=e=>{e.preventDefault();setInstallPrompt(e);};
+    window.addEventListener('beforeinstallprompt',handler);
+    return()=>window.removeEventListener('beforeinstallprompt',handler);
+  },[]);
+
+  const installApp=()=>{
+    if(!installPrompt)return;
+    installPrompt.prompt();
+    installPrompt.userChoice.then(()=>{setInstallPrompt(null);});
+  };
 
   const login=()=>{LS.set("auth",true);setAuthed(true);};
   const logout=()=>{LS.set("auth",false);setAuthed(false);};
@@ -1012,7 +1032,16 @@ function App(){
       </div>
     </div>
 
-    <div style={{display:"flex",flex:1,overflow:"hidden",height:"calc(100vh - 60px)"}}>
+    {/* PWA Install Banner */}
+    {installPrompt&&!installDismissed&&<div style={{background:"#1a4a2c",color:"#fff",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:13,gap:12}}>
+      <span>📲 <strong>Install BYT Transport</strong> — Add to your desktop for offline access, no internet needed.</span>
+      <div style={{display:"flex",gap:8,flexShrink:0}}>
+        <button onClick={installApp} style={{background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",fontWeight:700,fontSize:12,cursor:"pointer"}}>Install App</button>
+        <button onClick={()=>setInstallDismissed(true)} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"none",borderRadius:6,padding:"5px 10px",fontSize:12,cursor:"pointer"}}>✕</button>
+      </div>
+    </div>}
+
+    <div style={{display:"flex",flex:1,overflow:"hidden",height:`calc(100vh - ${60+(installPrompt&&!installDismissed?44:0)}px)`}}>
       {sideOpen&&<div style={{width:205,background:"#fff",borderRight:`1px solid ${C.border}`,padding:"12px 0",display:"flex",flexDirection:"column",gap:1,flexShrink:0,overflowY:"auto"}}>
         {nav.map(i=><button key={i.id} onClick={()=>setPage(i.id)} style={{
           display:"flex",alignItems:"center",gap:9,padding:"9px 18px",
@@ -1033,6 +1062,16 @@ function App(){
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+<script>
+// Register Service Worker for offline PWA support
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/byt-transport/sw.js')
+      .then(reg => console.log('BYT Transport SW registered:', reg.scope))
+      .catch(err => console.log('SW registration failed:', err));
+  });
+}
 </script>
 </body>
 </html>
