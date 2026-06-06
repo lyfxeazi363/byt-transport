@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>BYT Transport — Management System</title>
 <link rel="manifest" href="manifest.json"/>
 <meta name="theme-color" content="#1a3a5c"/>
@@ -21,163 +21,181 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6f9;color:#1a253
 ::-webkit-scrollbar-thumb{background:#c5cdd8;border-radius:3px}
 input,select,textarea,button{font-family:inherit}
 table{border-collapse:collapse;width:100%}
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:999}
-.modal{background:#fff;border-radius:12px;padding:28px;width:90%;max-width:520px;box-shadow:0 8px 40px rgba(0,0,0,0.2);max-height:90vh;overflow-y:auto}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:999;padding:16px}
+.modal{background:#fff;border-radius:14px;padding:28px;width:100%;max-width:540px;box-shadow:0 12px 48px rgba(0,0,0,0.22);max-height:90vh;overflow-y:auto}
+.fade{animation:fadeIn 0.2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const {useState,useEffect,useRef} = React;
+const {useState,useEffect,useRef,useCallback,useMemo}=React;
 
-/* ── COLOURS ─────────────────────────────────────────── */
-const C={
-  primary:"#1a3a5c",accent:"#e8a020",bg:"#f4f6f9",
+/* ─────────────────────────────────────────
+   THEME
+───────────────────────────────────────── */
+const ROLES={GM:"gm",OPS:"ops",DRIVER:"driver"};
+const ROLE_LABELS={gm:"General Manager",ops:"Operational Manager",driver:"Driver"};
+const ROLE_COLORS={gm:"#1a3a5c",ops:"#1a5cbf",driver:"#1a7a4a"};
+const ROLE_BG={gm:"#e8eef6",ops:"#e8eefb",driver:"#e6f4ec"};
+
+const C={primary:"#1a3a5c",accent:"#e8a020",bg:"#f4f6f9",
   border:"#dde3ec",text:"#1a2535",muted:"#6b7a8d",
   success:"#1a7a4a",danger:"#b93030",info:"#1a5cbf",
   sBg:"#e6f4ec",dBg:"#fceaea",iBg:"#e8eefb",
-  wBg:"#fdf3e0",wTx:"#b96a10",wBd:"#f5d38a"
-};
+  wBg:"#fdf3e0",wTx:"#b96a10",wBd:"#f5d38a"};
 
-/* ── DEFAULT SETTINGS ────────────────────────────────── */
-const DEF={
-  companyName:"BYT Transport",
-  logoText:"BYT",
-  tagline:"Admin Management System",
-  address:"Kasoa, Ghana",
-  phone:"0557086481",
-  email:"",
-  primaryColor:"#1a3a5c",
-  accentColor:"#e8a020",
-  logoImage:"",
-  loginBg:"",
-  appBg:"",
-  username:"admin",
-  password:"byt2024",
-};
-
-/* ── LOCAL STORAGE ───────────────────────────────────── */
+/* ─────────────────────────────────────────
+   LOCAL STORAGE
+───────────────────────────────────────── */
 const LS={
-  get:k=>{try{const v=localStorage.getItem("byt_"+k);return v?JSON.parse(v):null;}catch{return null;}},
-  set:(k,v)=>{try{localStorage.setItem("byt_"+k,JSON.stringify(v));}catch{}}
+  get:k=>{try{const v=localStorage.getItem("byt2_"+k);return v?JSON.parse(v):null}catch{return null}},
+  set:(k,v)=>{try{localStorage.setItem("byt2_"+k,JSON.stringify(v))}catch{}}
 };
-const loadData=k=>LS.get(k);
-const saveData=(k,v)=>LS.set(k,v);
-const loadSettings=()=>({...DEF,...(LS.get("cfg")||{})});
+const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);
+const GHC=n=>`GH₵ ${Number(n||0).toLocaleString("en-GH",{minimumFractionDigits:2})}`;
+const today=()=>new Date().toISOString().slice(0,10);
+const daysUntil=d=>{if(!d)return null;return Math.ceil((new Date(d)-new Date())/(864e5));};
+const expiryStatus=d=>{const n=daysUntil(d);if(n===null)return"Unknown";if(n<0)return"Expired";if(n<=30)return"Expiring Soon";return"Active";};
+const WEEKS=Array.from({length:20},(_,i)=>{const d=new Date();d.setDate(d.getDate()-i*7);const wn=Math.ceil((d-new Date(d.getFullYear(),0,1))/(864e5*7));return`Week ${wn} ${d.getFullYear()}`;});
 
-/* ── SEED DATA ───────────────────────────────────────── */
-const WEEKS=["Week 23 (Jun 2-8)","Week 22 (May 26-Jun 1)","Week 21 (May 19-25)","Week 20 (May 12-18)","Week 19 (May 5-11)"];
-const SEED={
-  cars:[
-    {id:"BYT-001",plate:"GR-8821-23",make:"Toyota Sprinter",driver:"Kwame Asante",driverID:"DRV-101",status:"Active"},
-    {id:"BYT-002",plate:"GR-4432-22",make:"Hyundai H100",driver:"Kofi Mensah",driverID:"DRV-102",status:"Active"},
-    {id:"BYT-003",plate:"GR-7754-21",make:"Mercedes Sprinter",driver:"Yaw Boateng",driverID:"DRV-103",status:"Active"},
-    {id:"BYT-004",plate:"GR-2293-20",make:"Ford Transit",driver:"Ama Darko",driverID:"DRV-104",status:"Maintenance"},
-    {id:"BYT-005",plate:"GR-5561-23",make:"Toyota HiAce",driver:"Nana Osei",driverID:"DRV-105",status:"Active"},
-  ],
-  sales:[
-    {id:1,week:"Week 23 (Jun 2-8)",driver:"Kwame Asante",carID:"BYT-001",trips:28,revenue:2800,fuel:420,net:2380},
-    {id:2,week:"Week 23 (Jun 2-8)",driver:"Kofi Mensah",carID:"BYT-002",trips:24,revenue:2400,fuel:360,net:2040},
-    {id:3,week:"Week 23 (Jun 2-8)",driver:"Yaw Boateng",carID:"BYT-003",trips:30,revenue:3000,fuel:450,net:2550},
-    {id:4,week:"Week 23 (Jun 2-8)",driver:"Nana Osei",carID:"BYT-005",trips:22,revenue:2200,fuel:330,net:1870},
-    {id:5,week:"Week 22 (May 26-Jun 1)",driver:"Kwame Asante",carID:"BYT-001",trips:25,revenue:2500,fuel:375,net:2125},
-    {id:6,week:"Week 22 (May 26-Jun 1)",driver:"Kofi Mensah",carID:"BYT-002",trips:27,revenue:2700,fuel:405,net:2295},
-    {id:7,week:"Week 21 (May 19-25)",driver:"Yaw Boateng",carID:"BYT-003",trips:29,revenue:2900,fuel:435,net:2465},
-    {id:8,week:"Week 20 (May 12-18)",driver:"Kwame Asante",carID:"BYT-001",trips:30,revenue:3000,fuel:450,net:2550},
-    {id:9,week:"Week 19 (May 5-11)",driver:"Nana Osei",carID:"BYT-005",trips:20,revenue:2000,fuel:300,net:1700},
-  ],
-  expenses:[
-    {id:1,week:"Week 23 (Jun 2-8)",category:"Road Tax",recipient:"DVLA Ghana",amount:500,note:"Annual renewal"},
-    {id:2,week:"Week 23 (Jun 2-8)",category:"Tolls",recipient:"Ghana Highways",amount:180,note:"Accra–Kasoa"},
-    {id:3,week:"Week 22 (May 26-Jun 1)",category:"Cleaning",recipient:"Bright Wash",amount:250,note:""},
-  ],
-  payments:[
-    {id:1,week:"Week 23 (Jun 2-8)",payee:"Kasoa Security Co.",purpose:"Night guard",amount:400,method:"Mobile Money",status:"Paid"},
-    {id:2,week:"Week 23 (Jun 2-8)",payee:"Kofi Electricals",purpose:"Wiring repair BYT-004",amount:350,method:"Cash",status:"Paid"},
-    {id:3,week:"Week 22 (May 26-Jun 1)",payee:"Ama Cleaning Services",purpose:"Office cleaning",amount:250,method:"Cash",status:"Paid"},
-  ],
-  oil:[
-    {id:1,week:"Week 23 (Jun 2-8)",oilType:"5W-30 Synthetic",litres:20,costPerL:45,total:900,supplier:"Kasoa Oil Depot",note:""},
-    {id:2,week:"Week 22 (May 26-Jun 1)",oilType:"10W-40 Semi",litres:18,costPerL:38,total:684,supplier:"Kasoa Oil Depot",note:""},
-    {id:3,week:"Week 21 (May 19-25)",oilType:"5W-30 Synthetic",litres:22,costPerL:45,total:990,supplier:"Total Energies GH",note:""},
-  ],
-  salaries:[
-    {id:1,week:"Week 23 (Jun 2-8)",driver:"Kwame Asante",base:600,bonus:280,deductions:50,total:830,status:"Paid"},
-    {id:2,week:"Week 23 (Jun 2-8)",driver:"Kofi Mensah",base:600,bonus:240,deductions:50,total:790,status:"Paid"},
-    {id:3,week:"Week 23 (Jun 2-8)",driver:"Yaw Boateng",base:600,bonus:300,deductions:50,total:850,status:"Pending"},
-    {id:4,week:"Week 23 (Jun 2-8)",driver:"Nana Osei",base:600,bonus:220,deductions:50,total:770,status:"Pending"},
-    {id:5,week:"Week 22 (May 26-Jun 1)",driver:"Kwame Asante",base:600,bonus:250,deductions:50,total:800,status:"Paid"},
-  ],
-  parts:[
-    {id:1,week:"Week 23 (Jun 2-8)",carID:"BYT-004",part:"Brake Pads",supplier:"Auto Parts GH",qty:2,unitCost:180,total:360},
-    {id:2,week:"Week 23 (Jun 2-8)",carID:"BYT-001",part:"Air Filter",supplier:"Kasoa Motors",qty:1,unitCost:75,total:75},
-    {id:3,week:"Week 22 (May 26-Jun 1)",carID:"BYT-003",part:"Wipers Set",supplier:"Auto Parts GH",qty:1,unitCost:60,total:60},
-  ],
-  insurance:[
-    {id:1,carID:"BYT-001",plate:"GR-8821-23",insurer:"Star Assurance",policyNo:"SA-2024-00183",issueDate:"2025-06-01",expiryDate:"2026-05-31",premium:1800,type:"Comprehensive"},
-    {id:2,carID:"BYT-002",plate:"GR-4432-22",insurer:"Enterprise Insurance",policyNo:"EI-2025-00741",issueDate:"2025-09-15",expiryDate:"2026-09-14",premium:1600,type:"Comprehensive"},
-    {id:3,carID:"BYT-003",plate:"GR-7754-21",insurer:"Star Assurance",policyNo:"SA-2025-00452",issueDate:"2026-01-10",expiryDate:"2027-01-09",premium:2100,type:"Comprehensive"},
-    {id:4,carID:"BYT-004",plate:"GR-2293-20",insurer:"Ghana Union Assurance",policyNo:"GUA-2025-01123",issueDate:"2025-11-20",expiryDate:"2026-11-19",premium:1400,type:"Third Party"},
-    {id:5,carID:"BYT-005",plate:"GR-5561-23",insurer:"Vanguard Assurance",policyNo:"VA-2026-00089",issueDate:"2026-03-01",expiryDate:"2027-02-28",premium:1950,type:"Comprehensive"},
-  ],
-  logs:[
-    {id:1,date:"2026-06-03",carID:"BYT-004",driver:"Ama Darko",type:"Accident",severity:"Moderate",desc:"Minor collision at Kasoa roundabout. Front bumper damaged.",status:"Open"},
-    {id:2,date:"2026-05-28",carID:"BYT-002",driver:"Kofi Mensah",type:"Insurance Claim",severity:"Low",desc:"Windshield crack claim submitted to Star Assurance.",status:"In Review"},
-    {id:3,date:"2026-05-20",carID:"BYT-001",driver:"Kwame Asante",type:"Breakdown",severity:"Low",desc:"Engine overheating on Accra–Kasoa highway.",status:"Resolved"},
-  ],
-};
-const init=k=>loadData(k)??SEED[k];
-const uid=()=>Date.now()+Math.random();
-const GHC=n=>`GH₵ ${Number(n).toLocaleString("en-GH",{minimumFractionDigits:2})}`;
-const getInsStatus=exp=>{if(!exp)return"Unknown";const d=Math.ceil((new Date(exp)-new Date())/(864e5));return d<0?"Expired":d<=30?"Expiring Soon":"Active";};
+/* ─────────────────────────────────────────
+   INITIAL DATA BOOTSTRAP
+───────────────────────────────────────── */
+function bootstrap(){
+  if(LS.get("bootstrapped"))return;
+  // Seed users
+  const users=[
+    {id:"gm1",role:ROLES.GM,username:"gm",password:"gm2024",name:"General Manager",email:"gm@byttransport.gh",createdAt:today()},
+    {id:"ops1",role:ROLES.OPS,username:"ops",password:"ops2024",name:"Ops Manager",email:"ops@byttransport.gh",createdAt:today()},
+    {id:"drv1",role:ROLES.DRIVER,username:"kwame",password:"drv2024",name:"Kwame Asante",driverID:"DRV-101",email:"",createdAt:today()},
+    {id:"drv2",role:ROLES.DRIVER,username:"kofi",password:"drv2024",name:"Kofi Mensah",driverID:"DRV-102",email:"",createdAt:today()},
+    {id:"drv3",role:ROLES.DRIVER,username:"yaw",password:"drv2024",name:"Yaw Boateng",driverID:"DRV-103",email:"",createdAt:today()},
+  ];
+  LS.set("users",users);
 
-/* ── SHARED UI ───────────────────────────────────────── */
+  // Seed car info per driver
+  const carInfo=[
+    {id:uid(),driverID:"drv1",carNumber:"BYT-001",plate:"GR-8821-23",make:"Toyota Sprinter",color:"White",licenseNo:"GH-1234567",licenseExpiry:"2027-05-01",roadworthyIssued:"2026-01-10",roadworthyExpiry:"2027-01-09",updatedAt:today()},
+    {id:uid(),driverID:"drv2",carNumber:"BYT-002",plate:"GR-4432-22",make:"Hyundai H100",color:"Silver",licenseNo:"GH-2345678",licenseExpiry:"2026-11-15",roadworthyIssued:"2026-02-01",roadworthyExpiry:"2027-01-31",updatedAt:today()},
+    {id:uid(),driverID:"drv3",carNumber:"BYT-003",plate:"GR-7754-21",make:"Mercedes Sprinter",color:"Blue",licenseNo:"GH-3456789",licenseExpiry:"2028-03-20",roadworthyIssued:"2026-03-05",roadworthyExpiry:"2027-03-04",updatedAt:today()},
+  ];
+  LS.set("carInfo",carInfo);
+
+  // Seed driver sales
+  const driverSales=[
+    {id:uid(),driverID:"drv1",week:WEEKS[0],trips:28,amount:2800,notes:"",submittedAt:today()},
+    {id:uid(),driverID:"drv2",week:WEEKS[0],trips:24,amount:2400,notes:"",submittedAt:today()},
+    {id:uid(),driverID:"drv3",week:WEEKS[0],trips:30,amount:3000,notes:"",submittedAt:today()},
+    {id:uid(),driverID:"drv1",week:WEEKS[1],trips:25,amount:2500,notes:"",submittedAt:today()},
+    {id:uid(),driverID:"drv2",week:WEEKS[1],trips:27,amount:2700,notes:"",submittedAt:today()},
+  ];
+  LS.set("driverSales",driverSales);
+
+  // Seed ops data
+  const opsSales=[
+    {id:uid(),week:WEEKS[0],totalRevenue:10400,fuelCost:1560,netRevenue:8840,notes:"",submittedBy:"ops1",submittedAt:today()},
+  ];
+  LS.set("opsSales",opsSales);
+
+  const parts=[
+    {id:uid(),week:WEEKS[0],carNumber:"BYT-001",part:"Brake Pads",supplier:"Auto Parts GH",qty:2,unitCost:180,total:360,submittedBy:"ops1",submittedAt:today()},
+    {id:uid(),week:WEEKS[0],carNumber:"BYT-003",part:"Air Filter",supplier:"Kasoa Motors",qty:1,unitCost:75,total:75,submittedBy:"ops1",submittedAt:today()},
+  ];
+  LS.set("parts",parts);
+
+  const oil=[
+    {id:uid(),week:WEEKS[0],oilType:"5W-30 Synthetic",litres:20,costPerL:45,total:900,supplier:"Kasoa Oil Depot",notes:"",submittedBy:"ops1",submittedAt:today()},
+  ];
+  LS.set("oil",oil);
+
+  const insurance=[
+    {id:uid(),carNumber:"BYT-001",insurer:"Star Assurance",policyNo:"SA-2024-00183",issueDate:"2025-06-01",expiryDate:"2026-05-31",premium:1800,type:"Comprehensive",submittedBy:"ops1",submittedAt:today()},
+    {id:uid(),carNumber:"BYT-002",insurer:"Enterprise Insurance",policyNo:"EI-2025-00741",issueDate:"2025-09-15",expiryDate:"2026-09-14",premium:1600,type:"Comprehensive",submittedBy:"ops1",submittedAt:today()},
+    {id:uid(),carNumber:"BYT-003",insurer:"Star Assurance",policyNo:"SA-2025-00452",issueDate:"2026-01-10",expiryDate:"2027-01-09",premium:2100,type:"Comprehensive",submittedBy:"ops1",submittedAt:today()},
+  ];
+  LS.set("insurance",insurance);
+
+  const logs=[
+    {id:uid(),date:"2026-06-03",carNumber:"BYT-001",driverName:"Kwame Asante",type:"Accident",severity:"Moderate",desc:"Minor collision at Kasoa roundabout.",status:"Open",submittedBy:"ops1",submittedAt:today()},
+  ];
+  LS.set("logs",logs);
+
+  const payments=[
+    {id:uid(),week:WEEKS[0],payee:"Kasoa Security Co.",purpose:"Night guard",amount:400,method:"Mobile Money",status:"Paid",submittedBy:"ops1",submittedAt:today()},
+  ];
+  LS.set("payments",payments);
+
+  LS.set("bootstrapped",true);
+}
+bootstrap();
+
+/* ─────────────────────────────────────────
+   SHARED UI COMPONENTS
+───────────────────────────────────────── */
 const SM={Active:[C.success,C.sBg,"#aedcc2"],Maintenance:[C.accent,C.wBg,C.wBd],Paid:[C.success,C.sBg,"#aedcc2"],Pending:[C.wTx,C.wBg,C.wBd],Open:[C.danger,C.dBg,"#f5b0b0"],"In Review":[C.info,C.iBg,"#a5c2f2"],Resolved:[C.success,C.sBg,"#aedcc2"],Expired:[C.danger,C.dBg,"#f5b0b0"],"Expiring Soon":[C.wTx,C.wBg,C.wBd],Unknown:[C.muted,"#f0f2f5","#c8cdd4"]};
-
-function Bdg({label,color,bg,border}){
-  return <span style={{fontSize:11,fontWeight:600,padding:"2px 10px",borderRadius:20,background:bg,color,border:`1px solid ${border}`,whiteSpace:"nowrap"}}>{label}</span>;
-}
+function Bdg({label,color,bg,border}){return <span style={{fontSize:11,fontWeight:600,padding:"2px 10px",borderRadius:20,background:bg,color,border:`1px solid ${border}`,whiteSpace:"nowrap"}}>{label}</span>;}
 function SBdg({s}){const[c,bg,b]=SM[s]||SM.Unknown;return <Bdg label={s} color={c} bg={bg} border={b}/>;}
-function Card({children,style}){return <div style={{background:"#fff",borderRadius:10,border:`1px solid ${C.border}`,padding:"20px 22px",...style}}>{children}</div>;}
-function Row({title,action}){return <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}><h2 style={{fontSize:17,fontWeight:700,color:C.primary,margin:0}}>{title}</h2>{action}</div>;}
-function Metric({label,value,sub,color}){return <div style={{background:color||"#f4f6f9",borderRadius:10,padding:"16px 20px",border:`1px solid ${C.border}`}}><div style={{fontSize:12,color:C.muted,fontWeight:600,marginBottom:6}}>{label}</div><div style={{fontSize:22,fontWeight:700,color:C.primary}}>{value}</div>{sub&&<div style={{fontSize:11,color:C.muted,marginTop:3}}>{sub}</div>}</div>;}
-function Btn({children,onClick,v="primary",sm,danger}){
-  const base={primary:{background:C.primary,color:"#fff",border:"none"},accent:{background:C.accent,color:"#fff",border:"none"},outline:{background:"#fff",color:C.primary,border:`1px solid ${C.primary}`},ghost:{background:"transparent",color:C.muted,border:`1px solid ${C.border}`}};
+function RoleBdg({role}){return <Bdg label={ROLE_LABELS[role]||role} color={ROLE_COLORS[role]||C.muted} bg={ROLE_BG[role]||"#f0f2f5"} border={ROLE_COLORS[role]+"44"}/>;}
+
+function Card({children,style}){return <div style={{background:"rgba(255,255,255,0.97)",borderRadius:12,border:`1px solid ${C.border}`,padding:"20px 22px",boxShadow:"0 1px 4px rgba(0,0,0,0.05)",...style}}>{children}</div>;}
+function PageTitle({title,sub,action}){return <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:22,gap:12}}><div><h1 style={{fontSize:20,fontWeight:700,color:C.primary,margin:0}}>{title}</h1>{sub&&<p style={{margin:"4px 0 0",fontSize:13,color:C.muted}}>{sub}</p>}</div>{action}</div>;}
+function SectionTitle({title,action}){return <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}><h3 style={{fontSize:15,fontWeight:700,color:C.primary,margin:0}}>{title}</h3>{action}</div>;}
+function Metric({label,value,sub,color,onClick}){return <div onClick={onClick} style={{background:color||"#f4f6f9",borderRadius:10,padding:"16px 20px",border:`1px solid ${C.border}`,cursor:onClick?"pointer":"default",transition:"box-shadow 0.15s"}} onMouseEnter={e=>{if(onClick)e.currentTarget.style.boxShadow="0 4px 12px rgba(0,0,0,0.1)"}} onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+  <div style={{fontSize:12,color:C.muted,fontWeight:600,marginBottom:6}}>{label}</div>
+  <div style={{fontSize:22,fontWeight:700,color:C.primary}}>{value}</div>
+  {sub&&<div style={{fontSize:11,color:C.muted,marginTop:3}}>{sub}</div>}
+</div>;}
+
+function Btn({children,onClick,v="primary",sm,danger,full,disabled}){
+  const base={primary:{background:C.primary,color:"#fff",border:"none"},accent:{background:C.accent,color:"#fff",border:"none"},outline:{background:"#fff",color:C.primary,border:`1px solid ${C.primary}`},ghost:{background:"transparent",color:C.muted,border:`1px solid ${C.border}`},success:{background:C.success,color:"#fff",border:"none"}};
   const s=base[v]||base.primary;
-  return <button onClick={onClick} style={{...s,...(danger?{background:"#fff",color:C.danger,border:`1px solid ${C.danger}`}:{}),cursor:"pointer",borderRadius:7,padding:sm?"4px 10px":"8px 16px",fontSize:sm?11:13,fontWeight:600,whiteSpace:"nowrap"}}>{children}</button>;
+  return <button onClick={onClick} disabled={disabled} style={{...s,...(danger?{background:"#fff",color:C.danger,border:`1px solid ${C.danger}`}:{}),cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.6:1,borderRadius:8,padding:sm?"5px 12px":"9px 18px",fontSize:sm?12:13,fontWeight:600,whiteSpace:"nowrap",width:full?"100%":"auto",transition:"opacity 0.15s"}}>{children}</button>;
 }
-function Inp({label,value,onChange,type="text",opts,req,ph}){
-  return <div style={{display:"flex",flexDirection:"column",gap:4}}>
+
+function Inp({label,value,onChange,type="text",opts,req,ph,hint,readOnly,half}){
+  return <div style={{display:"flex",flexDirection:"column",gap:5,gridColumn:half?"span 1":""}}>
     <label style={{fontSize:12,fontWeight:600,color:C.muted}}>{label}{req&&<span style={{color:C.danger}}> *</span>}</label>
-    {opts
-      ?<select value={value} onChange={e=>onChange(e.target.value)} style={{padding:"7px 10px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:13,color:C.text,background:"#fff"}}>
+    {opts?<select value={value} onChange={e=>onChange&&onChange(e.target.value)} disabled={readOnly} style={{padding:"8px 10px",borderRadius:7,border:`1px solid ${readOnly?"#e8eaed":C.border}`,fontSize:13,color:C.text,background:readOnly?"#f8f9fa":"#fff"}}>
         <option value="">Select…</option>
-        {opts.map(o=><option key={o} value={o}>{o}</option>)}
+        {opts.map(o=><option key={o.value||o} value={o.value||o}>{o.label||o}</option>)}
       </select>
-      :<input type={type} value={value} placeholder={ph||""} onChange={e=>onChange(e.target.value)} style={{padding:"7px 10px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:13,color:C.text}}/>}
+    :<input type={type} value={value} placeholder={ph||""} readOnly={readOnly} onChange={e=>onChange&&onChange(e.target.value)} style={{padding:"8px 10px",borderRadius:7,border:`1px solid ${readOnly?"#e8eaed":C.border}`,fontSize:13,color:C.text,background:readOnly?"#f8f9fa":"#fff"}}/>}
+    {hint&&<span style={{fontSize:11,color:C.muted}}>{hint}</span>}
   </div>;
 }
-function THead({cols}){return <thead><tr>{cols.map((h,i)=><th key={i} style={{padding:"8px 12px",background:"#f4f6f9",color:C.muted,fontWeight:600,textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>;}
-function TRow({cells}){return <tr style={{borderBottom:`1px solid ${C.border}`}}>{cells.map((c,i)=><td key={i} style={{padding:"9px 12px",verticalAlign:"middle"}}>{c}</td>)}</tr>;}
-function Modal({title,onClose,children}){
+
+function TH({cols}){return <thead><tr>{cols.map((h,i)=><th key={i} style={{padding:"9px 12px",background:"#f4f6f9",color:C.muted,fontWeight:600,textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap",fontSize:12}}>{h}</th>)}</tr></thead>;}
+function TR({cells,onClick}){return <tr onClick={onClick} style={{borderBottom:`1px solid ${C.border}`,cursor:onClick?"pointer":"default",transition:"background 0.1s"}} onMouseEnter={e=>{if(onClick)e.currentTarget.style.background="#f8fafd"}} onMouseLeave={e=>e.currentTarget.style.background=""}>{cells.map((c,i)=><td key={i} style={{padding:"10px 12px",fontSize:13,verticalAlign:"middle"}}>{c}</td>)}</tr>;}
+
+function Modal({title,onClose,children,wide}){
   return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-    <div className="modal">
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-        <h3 style={{fontSize:16,fontWeight:700,color:C.primary}}>{title}</h3>
-        <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,color:C.muted,lineHeight:1,cursor:"pointer"}}>×</button>
+    <div className="modal fade" style={{maxWidth:wide?720:520}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}}>
+        <h3 style={{fontSize:17,fontWeight:700,color:C.primary}}>{title}</h3>
+        <button onClick={onClose} style={{background:"none",border:"none",fontSize:24,color:C.muted,lineHeight:1,cursor:"pointer",padding:"0 4px"}}>×</button>
       </div>
       {children}
     </div>
   </div>;
 }
-function ConfirmModal({msg,onConfirm,onClose}){
+function ConfirmDel({msg,onConfirm,onClose}){
   return <Modal title="Confirm Delete" onClose={onClose}>
-    <p style={{fontSize:13,color:C.muted,marginBottom:20}}>{msg}</p>
+    <p style={{fontSize:13,color:C.muted,marginBottom:22,lineHeight:1.6}}>{msg}</p>
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
       <Btn v="ghost" onClick={onClose}>Cancel</Btn>
-      <Btn v="primary" danger onClick={onConfirm}>Delete</Btn>
+      <Btn danger onClick={onConfirm}>Yes, Delete</Btn>
     </div>
   </Modal>;
+}
+function FormGrid({children}){return <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:18}}>{children}</div>;}
+function FullCol({children}){return <div style={{gridColumn:"1/-1"}}>{children}</div>;}
+function FormFooter({onCancel,onSave,saveLabel="Save"}){
+  return <div style={{display:"flex",gap:10,justifyContent:"flex-end",paddingTop:4}}>
+    <Btn v="ghost" onClick={onCancel}>Cancel</Btn>
+    <Btn v="accent" onClick={onSave}>{saveLabel}</Btn>
+  </div>;
 }
 function ActBtns({onEdit,onDel}){
   return <div style={{display:"flex",gap:6}}>
@@ -185,622 +203,892 @@ function ActBtns({onEdit,onDel}){
     <Btn sm v="ghost" danger onClick={onDel}>🗑️</Btn>
   </div>;
 }
-function FormFooter({onCancel,onSave}){
-  return <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:4}}>
-    <Btn v="ghost" onClick={onCancel}>Cancel</Btn>
-    <Btn v="accent" onClick={onSave}>Save</Btn>
+function Alert({type,children}){
+  const styles={warn:{bg:C.wBg,border:C.wBd,color:C.wTx,icon:"⚠️"},danger:{bg:C.dBg,border:"#f5b0b0",color:C.danger,icon:"🚨"},info:{bg:C.iBg,border:"#a5c2f2",color:C.info,icon:"ℹ️"},success:{bg:C.sBg,border:"#aedcc2",color:C.success,icon:"✓"}};
+  const s=styles[type]||styles.info;
+  return <div style={{background:s.bg,border:`1px solid ${s.border}`,borderRadius:9,padding:"10px 14px",fontSize:13,color:s.color,marginBottom:14,display:"flex",gap:8,alignItems:"flex-start"}}><span>{s.icon}</span><span>{children}</span></div>;
+}
+
+function Tabs({tabs,active,onChange}){
+  return <div style={{display:"flex",gap:2,borderBottom:`2px solid ${C.border}`,marginBottom:20}}>
+    {tabs.map(t=><button key={t.id} onClick={()=>onChange(t.id)} style={{padding:"9px 18px",fontSize:13,fontWeight:active===t.id?700:400,background:"none",border:"none",cursor:"pointer",color:active===t.id?C.primary:C.muted,borderBottom:active===t.id?`2px solid ${C.primary}`:"2px solid transparent",marginBottom:-2,whiteSpace:"nowrap"}}>{t.label}</button>)}
   </div>;
 }
-function Grid({children}){return <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>{children}</div>;}
-function Full({children}){return <div style={{gridColumn:"1/-1"}}>{children}</div>;}
 
-/* ── LOGIN ───────────────────────────────────────────── */
-function Login({onLogin,S}){
+/* ─────────────────────────────────────────
+   DATA HOOKS
+───────────────────────────────────────── */
+function useData(key){
+  const [data,setData]=useState(()=>LS.get(key)||[]);
+  const save=useCallback(next=>{setData(next);LS.set(key,next);},[key]);
+  const add=item=>{const next=[...data,{...item,id:uid()}];save(next);};
+  const update=(id,item)=>{const next=data.map(x=>x.id===id?{...item,id}:x);save(next);};
+  const remove=id=>{const next=data.filter(x=>x.id!==id);save(next);};
+  return{data,save,add,update,remove};
+}
+
+/* ─────────────────────────────────────────
+   LOGIN
+───────────────────────────────────────── */
+function Login({onLogin}){
   const [u,setU]=useState(""),[p,setP]=useState(""),[err,setErr]=useState(""),[show,setShow]=useState(false);
-  const go=()=>{if(u===S.username&&p===S.password)onLogin();else{setErr("Invalid username or password.");setP("");}};
-  const bgStyle=S.loginBg?{backgroundImage:`url(${S.loginBg})`,backgroundSize:"cover",backgroundPosition:"center"}:{background:`linear-gradient(135deg,${S.primaryColor} 0%,#2a5a8c 100%)`};
-  return <div style={{minHeight:"100vh",...bgStyle,display:"flex",alignItems:"center",justifyContent:"center"}}>
-    <div style={{background:"#fff",borderRadius:16,padding:"40px 36px",width:360,boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
-      <div style={{textAlign:"center",marginBottom:28}}>
-        <div style={{width:60,height:60,borderRadius:14,background:S.accentColor,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:20,color:"#fff",marginBottom:14,overflow:"hidden"}}>
-          {S.logoImage?<img src={S.logoImage} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span>{S.logoText||S.companyName.slice(0,3).toUpperCase()}</span>}
-        </div>
-        <div style={{fontSize:22,fontWeight:700,color:S.primaryColor}}>{S.companyName}</div>
-        <div style={{fontSize:13,color:C.muted,marginTop:4}}>{S.tagline}</div>
-        {(S.address||S.phone)&&<div style={{fontSize:11,color:C.muted,marginTop:3}}>{S.address&&`📍 ${S.address}`}{S.address&&S.phone&&" • "}{S.phone&&`📞 ${S.phone}`}</div>}
+  const go=()=>{
+    const users=LS.get("users")||[];
+    const user=users.find(x=>x.username===u.trim()&&x.password===p);
+    if(user){onLogin(user);}else{setErr("Invalid username or password.");setP("");}
+  };
+  return <div style={{minHeight:"100vh",background:`linear-gradient(135deg,#1a3a5c 0%,#0f2540 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div style={{background:"#fff",borderRadius:18,padding:"44px 40px",width:"100%",maxWidth:380,boxShadow:"0 24px 64px rgba(0,0,0,0.35)"}}>
+      <div style={{textAlign:"center",marginBottom:30}}>
+        <div style={{width:64,height:64,borderRadius:16,background:C.accent,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:22,color:"#fff",marginBottom:16,boxShadow:"0 4px 16px rgba(232,160,32,0.4)"}}>BYT</div>
+        <div style={{fontSize:22,fontWeight:800,color:C.primary}}>BYT Transport</div>
+        <div style={{fontSize:13,color:C.muted,marginTop:4}}>Management System — Sign In</div>
+        <div style={{fontSize:11,color:C.muted,marginTop:3}}>📍 Kasoa, Ghana &nbsp;•&nbsp; 0557086481</div>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        <Inp label="Username" value={u} onChange={setU} ph="Enter username" req/>
-        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+        <Inp label="Username" value={u} onChange={setU} ph="Enter your username" req/>
+        <div style={{display:"flex",flexDirection:"column",gap:5}}>
           <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Password <span style={{color:C.danger}}>*</span></label>
           <div style={{position:"relative"}}>
-            <input type={show?"text":"password"} value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder="••••••••" style={{width:"100%",padding:"7px 36px 7px 10px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:13}}/>
-            <button onClick={()=>setShow(s=>!s)} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,fontSize:14,cursor:"pointer"}}>{show?"🙈":"👁"}</button>
+            <input type={show?"text":"password"} value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder="••••••••" style={{width:"100%",padding:"8px 38px 8px 10px",borderRadius:7,border:`1px solid ${C.border}`,fontSize:13}}/>
+            <button onClick={()=>setShow(s=>!s)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,fontSize:14,cursor:"pointer"}}>{show?"🙈":"👁"}</button>
           </div>
         </div>
-        {err&&<div style={{fontSize:12,color:C.danger,background:C.dBg,padding:"8px 12px",borderRadius:6}}>{err}</div>}
-        <button onClick={go} style={{background:S.primaryColor,color:"#fff",border:"none",borderRadius:8,padding:11,fontSize:14,fontWeight:700,cursor:"pointer",marginTop:4}}>Sign In</button>
+        {err&&<Alert type="danger">{err}</Alert>}
+        <button onClick={go} style={{background:C.primary,color:"#fff",border:"none",borderRadius:9,padding:12,fontSize:14,fontWeight:700,cursor:"pointer",marginTop:4,boxShadow:"0 4px 12px rgba(26,58,92,0.3)"}}>Sign In →</button>
       </div>
-      <div style={{marginTop:16,textAlign:"center",fontSize:11,color:C.muted}}>🔒 Authorised administrators only</div>
+      <div style={{marginTop:20,padding:"12px 14px",background:"#f4f6f9",borderRadius:9,fontSize:11,color:C.muted}}>
+        <div style={{fontWeight:600,marginBottom:6}}>Default login credentials:</div>
+        <div>👑 GM: <code>gm</code> / <code>gm2024</code></div>
+        <div>🔧 Ops: <code>ops</code> / <code>ops2024</code></div>
+        <div>🚐 Driver: <code>kwame</code> / <code>drv2024</code></div>
+      </div>
     </div>
   </div>;
 }
 
-/* ── SETTINGS ────────────────────────────────────────── */
-function Settings({S,onSave}){
-  const [f,setF]=useState({...S});
-  const [tab,setTab]=useState("branding");
-  const [ok,setOk]=useState(false);
-  const set=k=>v=>setF(p=>({...p,[k]:v}));
-
-  const upload=(key,maxKB)=>e=>{
-    const file=e.target.files[0];if(!file)return;
-    if(file.size>maxKB*1024){alert(`Please use an image under ${maxKB}KB.`);return;}
-    const r=new FileReader();r.onload=ev=>setF(p=>({...p,[key]:ev.target.result}));r.readAsDataURL(file);
-    e.target.value="";
-  };
-
-  const save=()=>{
-    if(!f.companyName||!f.username||!f.password){alert("Company name, username and password are required.");return;}
-    const credChanged=f.username!==S.username||f.password!==S.password;
-    onSave(f,credChanged);
-    setOk(true);setTimeout(()=>setOk(false),3000);
-  };
-
-  const TABS=[{id:"branding",label:"🎨 Branding"},{id:"backgrounds",label:"🖼️ Backgrounds"},{id:"contact",label:"📍 Contact"},{id:"security",label:"🔐 Security"}];
-
-  const UploadBox=({field,label,maxKB,hint,previewStyle})=>(
-    <div style={{border:`2px dashed ${C.border}`,borderRadius:10,padding:16,display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap"}}>
-      <div style={{width:160,height:100,borderRadius:8,overflow:"hidden",flexShrink:0,border:`1px solid ${C.border}`,...previewStyle}}>
-        {f[field]&&<img src={f[field]} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>}
-      </div>
-      <div style={{display:"flex",flexDirection:"column",gap:8,flex:1}}>
-        <label style={{background:S.primaryColor,color:"#fff",borderRadius:7,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",display:"inline-block",width:"fit-content"}}>
-          📁 {label}
-          <input type="file" accept="image/*" onChange={upload(field,maxKB)} style={{display:"none"}}/>
-        </label>
-        {f[field]
-          ?<><div style={{fontSize:12,color:C.success,fontWeight:600}}>✓ Image loaded</div>
-            <button onClick={()=>setF(p=>({...p,[field]:""}))} style={{background:"none",border:`1px solid ${C.danger}`,color:C.danger,borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer",fontWeight:600,width:"fit-content"}}>✕ Remove</button></>
-          :<div style={{fontSize:12,color:C.muted}}>No image set</div>}
-        <div style={{fontSize:11,color:C.muted}}>{hint}</div>
-      </div>
-    </div>
-  );
-
-  return <div style={{padding:24,maxWidth:680}}>
-    <div style={{marginBottom:20}}>
-      <h1 style={{fontSize:20,fontWeight:700,color:C.primary,margin:0}}>⚙️ Settings</h1>
-      <p style={{margin:"6px 0 0",fontSize:13,color:C.muted}}>Customise branding, backgrounds, contact details and login credentials. All changes save to this device.</p>
-    </div>
-
-    {/* Tabs */}
-    <div style={{display:"flex",gap:2,marginBottom:20,borderBottom:`2px solid ${C.border}`}}>
-      {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"9px 16px",fontSize:13,fontWeight:tab===t.id?700:400,background:"none",border:"none",cursor:"pointer",color:tab===t.id?C.primary:C.muted,borderBottom:tab===t.id?`2px solid ${C.primary}`:"2px solid transparent",marginBottom:-2}}>{t.label}</button>)}
-    </div>
-
-    {/* BRANDING */}
-    {tab==="branding"&&<Card>
-      <h3 style={{fontSize:14,fontWeight:700,color:C.primary,marginBottom:16}}>Company Branding</h3>
-      {/* Live preview */}
-      <div style={{marginBottom:20,padding:14,background:"#f4f6f9",borderRadius:10,display:"flex",alignItems:"center",gap:14}}>
-        <div style={{width:48,height:48,borderRadius:10,background:f.accentColor,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
-          {f.logoImage?<img src={f.logoImage} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontWeight:800,fontSize:13,color:"#fff"}}>{f.logoText||f.companyName.slice(0,3).toUpperCase()}</span>}
-        </div>
+/* ─────────────────────────────────────────
+   SHELL (shared header + sidebar wrapper)
+───────────────────────────────────────── */
+function Shell({user,onLogout,children,nav,activePage,setPage}){
+  const [open,setOpen]=useState(true);
+  const roleColor=ROLE_COLORS[user.role]||C.primary;
+  return <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column"}}>
+    {/* Header */}
+    <div style={{background:roleColor,color:"#fff",height:60,padding:"0 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 10px rgba(0,0,0,0.2)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <button onClick={()=>setOpen(o=>!o)} style={{background:"none",border:"none",color:"#fff",fontSize:22,cursor:"pointer",lineHeight:1,padding:4}}>☰</button>
+        <div style={{width:40,height:40,borderRadius:10,background:C.accent,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:14,color:"#fff",flexShrink:0}}>BYT</div>
         <div>
-          <div style={{fontWeight:700,fontSize:16,color:f.primaryColor}}>{f.companyName||"Company Name"}</div>
-          <div style={{fontSize:11,color:C.muted}}>{f.tagline||"Tagline"}</div>
-          <div style={{fontSize:11,color:C.muted,marginTop:1}}>{f.address&&`📍 ${f.address}`}{f.address&&f.phone&&" • "}{f.phone&&`📞 ${f.phone}`}</div>
+          <div style={{fontWeight:700,fontSize:16}}>BYT Transport</div>
+          <div style={{fontSize:10,color:"rgba(255,255,255,0.7)"}}>{ROLE_LABELS[user.role]} Portal</div>
         </div>
       </div>
-      <Grid>
-        <Inp label="Company Name" value={f.companyName} onChange={set("companyName")} req/>
-        <Inp label="Logo Letters (if no image)" value={f.logoText} onChange={set("logoText")}/>
-        <Full><Inp label="Tagline / Subtitle" value={f.tagline} onChange={set("tagline")}/></Full>
-        <div style={{display:"flex",flexDirection:"column",gap:6}}>
-          <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Primary Colour</label>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <input type="color" value={f.primaryColor} onChange={e=>set("primaryColor")(e.target.value)} style={{width:40,height:34,borderRadius:6,border:`1px solid ${C.border}`,cursor:"pointer",padding:2}}/>
-            <span style={{fontSize:12,color:C.muted,fontFamily:"monospace"}}>{f.primaryColor}</span>
-          </div>
+      <div style={{display:"flex",alignItems:"center",gap:14}}>
+        <div style={{fontSize:12,color:"rgba(255,255,255,0.85)",textAlign:"right"}}>
+          <div style={{fontWeight:600}}>{user.name}</div>
+          <div style={{fontSize:10,opacity:0.7}}>{ROLE_LABELS[user.role]}</div>
         </div>
-        <div style={{display:"flex",flexDirection:"column",gap:6}}>
-          <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Accent Colour</label>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <input type="color" value={f.accentColor} onChange={e=>set("accentColor")(e.target.value)} style={{width:40,height:34,borderRadius:6,border:`1px solid ${C.border}`,cursor:"pointer",padding:2}}/>
-            <span style={{fontSize:12,color:C.muted,fontFamily:"monospace"}}>{f.accentColor}</span>
-          </div>
-        </div>
-      </Grid>
-      <div style={{display:"flex",flexDirection:"column",gap:6}}>
-        <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Logo Image (PNG/JPG, max 200KB)</label>
-        <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-          {f.logoImage&&<div style={{width:48,height:48,borderRadius:10,overflow:"hidden",border:`1px solid ${C.border}`}}><img src={f.logoImage} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/></div>}
-          <label style={{background:C.primary,color:"#fff",borderRadius:7,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
-            📁 Upload Logo
-            <input type="file" accept="image/*" onChange={upload("logoImage",200)} style={{display:"none"}}/>
-          </label>
-          {f.logoImage&&<button onClick={()=>setF(p=>({...p,logoImage:""}))} style={{background:"none",border:`1px solid ${C.danger}`,color:C.danger,borderRadius:7,padding:"6px 12px",fontSize:12,cursor:"pointer",fontWeight:600}}>✕ Remove</button>}
-          {f.logoImage&&<span style={{fontSize:12,color:C.success}}>✓ Loaded</span>}
-        </div>
-        <span style={{fontSize:11,color:C.muted}}>If no image is uploaded, the Logo Letters text will be shown instead.</span>
+        <button onClick={onLogout} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",color:"#fff",borderRadius:8,padding:"6px 14px",fontSize:12,cursor:"pointer",fontWeight:600}}>🔒 Logout</button>
       </div>
-    </Card>}
-
-    {/* BACKGROUNDS */}
-    {tab==="backgrounds"&&<div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <Card>
-        <h3 style={{fontSize:14,fontWeight:700,color:C.primary,marginBottom:6}}>Login Screen Background</h3>
-        <p style={{fontSize:12,color:C.muted,marginBottom:14}}>Appears behind the login card. Best size: 1920×1080px. Max 1.5MB.</p>
-        <UploadBox field="loginBg" label="Upload Login Background" maxKB={1500}
-          hint="PNG, JPG or WEBP. The gradient is used if no image is set."
-          previewStyle={f.loginBg?{backgroundImage:`url(${f.loginBg})`,backgroundSize:"cover",backgroundPosition:"center"}:{background:`linear-gradient(135deg,${f.primaryColor},#2a5a8c)`}}/>
-      </Card>
-      <Card>
-        <h3 style={{fontSize:14,fontWeight:700,color:C.primary,marginBottom:6}}>App Background</h3>
-        <p style={{fontSize:12,color:C.muted,marginBottom:14}}>Appears behind the main dashboard and all pages. Max 1.5MB.</p>
-        <UploadBox field="appBg" label="Upload App Background" maxKB={1500}
-          hint="Tip: use a subtle texture or faint image so text stays readable."
-          previewStyle={f.appBg?{backgroundImage:`url(${f.appBg})`,backgroundSize:"cover",backgroundPosition:"center"}:{background:"#f4f6f9"}}/>
-      </Card>
-    </div>}
-
-    {/* CONTACT */}
-    {tab==="contact"&&<Card>
-      <h3 style={{fontSize:14,fontWeight:700,color:C.primary,marginBottom:16}}>Contact Information</h3>
-      <Grid>
-        <Full><Inp label="Address / Location" value={f.address} onChange={set("address")}/></Full>
-        <Inp label="Phone Number" value={f.phone} onChange={set("phone")}/>
-        <Inp label="Email (optional)" value={f.email} onChange={set("email")} type="email"/>
-      </Grid>
-      <div style={{padding:12,background:"#f4f6f9",borderRadius:8,fontSize:12,color:C.muted}}>These details appear in the app header and on the login screen.</div>
-    </Card>}
-
-    {/* SECURITY */}
-    {tab==="security"&&<Card>
-      <h3 style={{fontSize:14,fontWeight:700,color:C.primary,marginBottom:6}}>Login Credentials</h3>
-      <p style={{fontSize:13,color:C.muted,marginBottom:16}}>Change the username and password to access this app. You will be logged out after saving.</p>
-      <Grid>
-        <Inp label="Admin Username" value={f.username} onChange={set("username")} req/>
-        <Inp label="Admin Password" value={f.password} onChange={set("password")} type="password" req/>
-      </Grid>
-      <div style={{padding:12,background:C.wBg,border:`1px solid ${C.wBd}`,borderRadius:8,fontSize:12,color:C.wTx}}>⚠️ Write down your new password before saving. If forgotten, you will need to clear browser data to reset.</div>
-    </Card>}
-
-    {/* Save */}
-    <div style={{display:"flex",gap:12,alignItems:"center",marginTop:20}}>
-      <button onClick={save} style={{background:C.primary,color:"#fff",border:"none",borderRadius:8,padding:"10px 26px",fontSize:14,fontWeight:700,cursor:"pointer"}}>💾 Save Settings</button>
-      <button onClick={()=>setF({...DEF})} style={{background:"#fff",color:C.muted,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 16px",fontSize:13,cursor:"pointer"}}>Reset to Defaults</button>
-      {ok&&<span style={{fontSize:13,color:C.success,fontWeight:600}}>✓ Saved!</span>}
+    </div>
+    <div style={{display:"flex",flex:1,overflow:"hidden",height:"calc(100vh - 60px)"}}>
+      {/* Sidebar */}
+      {open&&<div style={{width:220,background:"#fff",borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",flexShrink:0,overflowY:"auto"}}>
+        <div style={{padding:"14px 16px 8px",fontSize:10,fontWeight:700,color:C.muted,letterSpacing:"0.08em"}}>NAVIGATION</div>
+        {nav.map((n,i)=>{
+          const isSection=n.section;
+          if(isSection)return <div key={i} style={{padding:"10px 16px 4px",fontSize:10,fontWeight:700,color:C.muted,letterSpacing:"0.08em",marginTop:4}}>{n.label}</div>;
+          return <button key={n.id} onClick={()=>setPage(n.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 16px",background:activePage===n.id?ROLE_BG[user.role]:"transparent",border:"none",cursor:"pointer",textAlign:"left",color:activePage===n.id?roleColor:C.text,fontWeight:activePage===n.id?700:400,fontSize:13,borderLeft:activePage===n.id?`3px solid ${roleColor}`:"3px solid transparent",transition:"all 0.1s"}}>
+            <span style={{fontSize:16,width:20,textAlign:"center"}}>{n.icon}</span>{n.label}
+          </button>;
+        })}
+        <div style={{marginTop:"auto",padding:"14px 16px",borderTop:`1px solid ${C.border}`}}>
+          <div style={{fontSize:11,color:C.muted,marginBottom:4}}>Signed in as</div>
+          <div style={{fontSize:13,fontWeight:700,color:C.text}}>{user.name}</div>
+          <div style={{marginTop:6}}><RoleBdg role={user.role}/></div>
+        </div>
+      </div>}
+      <div style={{flex:1,overflowY:"auto",padding:24}}>{children}</div>
     </div>
   </div>;
 }
 
-/* ── DASHBOARD ───────────────────────────────────────── */
-function Dashboard({cars,sales,expenses,oil,salaries,parts,logs,payments}){
-  const wk=WEEKS[0];
-  const rev=sales.filter(s=>s.week===wk).reduce((a,b)=>a+b.revenue,0);
-  const tO=oil.filter(o=>o.week===wk).reduce((a,b)=>a+b.total,0);
-  const tE=expenses.filter(e=>e.week===wk).reduce((a,b)=>a+b.amount,0);
-  const tS=salaries.filter(s=>s.week===wk).reduce((a,b)=>a+b.total,0);
-  const tP=parts.filter(p=>p.week===wk).reduce((a,b)=>a+b.total,0);
-  const tPy=payments.filter(p=>p.week===wk).reduce((a,b)=>a+b.amount,0);
-  const out=tO+tE+tS+tP+tPy;const net=rev-out;
-  const ws=sales.filter(s=>s.week===wk);
-  const open=logs.filter(l=>l.status!=="Resolved").length;
-  return <div style={{padding:24,display:"flex",flexDirection:"column",gap:20}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-      <div><h1 style={{fontSize:20,fontWeight:700,color:C.primary,margin:0}}>Dashboard</h1><p style={{margin:"4px 0 0",fontSize:13,color:C.muted}}>Current: {wk}</p></div>
-      <div style={{fontSize:12,color:C.muted}}>{new Date().toDateString()}</div>
-    </div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:14}}>
-      <Metric label="Weekly Revenue" value={GHC(rev)} sub={`${ws.length} drivers`}/>
-      <Metric label="Net Profit" value={GHC(net)} sub="After all expenses" color={net>=0?"#e9f5ee":"#fceaea"}/>
-      <Metric label="Fleet Size" value={cars.length} sub={`${cars.filter(c=>c.status==="Active").length} active`}/>
-      <Metric label="Open Issues" value={open} sub="Accidents & claims" color={open>0?C.wBg:"#f4f6f9"}/>
-      <Metric label="Payroll Paid" value={GHC(salaries.filter(s=>s.week===wk&&s.status==="Paid").reduce((a,b)=>a+b.total,0))} sub="This week"/>
+/* ═══════════════════════════════════════
+   GENERAL MANAGER PORTAL
+═══════════════════════════════════════ */
+function GMPortal({user,onLogout}){
+  const [page,setPage]=useState("dashboard");
+  const {data:users,save:saveUsers,add:addUser,update:updateUser,remove:removeUser}=useData("users");
+  const {data:carInfo}=useData("carInfo");
+  const {data:driverSales}=useData("driverSales");
+  const {data:opsSales}=useData("opsSales");
+  const {data:parts}=useData("parts");
+  const {data:oil}=useData("oil");
+  const {data:insurance}=useData("insurance");
+  const {data:logs}=useData("logs");
+  const {data:payments}=useData("payments");
+
+  const drivers=users.filter(u=>u.role===ROLES.DRIVER);
+  const ops=users.filter(u=>u.role===ROLES.OPS);
+
+  const nav=[
+    {id:"dashboard",icon:"📊",label:"Dashboard"},
+    {id:"finance",icon:"📈",label:"Financial Overview"},
+    {section:true,label:"FLEET & PEOPLE"},
+    {id:"fleet",icon:"🚐",label:"Fleet Overview"},
+    {id:"drivers",icon:"👷",label:"Drivers"},
+    {id:"users",icon:"👥",label:"User Management"},
+    {section:true,label:"OPERATIONS"},
+    {id:"sales",icon:"💰",label:"All Sales"},
+    {id:"insurance",icon:"🛡️",label:"Insurance"},
+    {id:"parts",icon:"🔧",label:"Car Parts"},
+    {id:"oil",icon:"🛢️",label:"Oil Records"},
+    {id:"payments",icon:"💳",label:"Payments"},
+    {id:"logs",icon:"📝",label:"Issue Logs"},
+  ];
+
+  const pages={
+    dashboard:<GMDashboard user={user} drivers={drivers} carInfo={carInfo} driverSales={driverSales} opsSales={opsSales} parts={parts} oil={oil} insurance={insurance} logs={logs} payments={payments}/>,
+    finance:<GMFinance driverSales={driverSales} opsSales={opsSales} parts={parts} oil={oil} payments={payments}/>,
+    fleet:<GMFleet carInfo={carInfo} drivers={drivers} insurance={insurance}/>,
+    drivers:<GMDrivers drivers={drivers} carInfo={carInfo} driverSales={driverSales}/>,
+    users:<GMUsers users={users} saveUsers={saveUsers} currentUser={user}/>,
+    sales:<GMAllSales driverSales={driverSales} drivers={drivers} opsSales={opsSales}/>,
+    insurance:<GMInsurance insurance={insurance}/>,
+    parts:<GMParts parts={parts}/>,
+    oil:<GMOil oil={oil}/>,
+    payments:<GMPayments payments={payments}/>,
+    logs:<GMLogs logs={logs}/>,
+  };
+
+  return <Shell user={user} onLogout={onLogout} nav={nav} activePage={page} setPage={setPage}>
+    {pages[page]||pages.dashboard}
+  </Shell>;
+}
+
+function GMDashboard({drivers,carInfo,driverSales,opsSales,parts,oil,insurance,logs,payments}){
+  const thisWeek=WEEKS[0];
+  const weekSales=driverSales.filter(s=>s.week===thisWeek);
+  const totalRev=weekSales.reduce((a,b)=>a+Number(b.amount||0),0);
+  const totalOil=oil.filter(o=>o.week===thisWeek).reduce((a,b)=>a+Number(b.total||0),0);
+  const totalParts=parts.filter(p=>p.week===thisWeek).reduce((a,b)=>a+Number(b.total||0),0);
+  const totalPay=payments.filter(p=>p.week===thisWeek).reduce((a,b)=>a+Number(b.amount||0),0);
+  const totalOut=totalOil+totalParts+totalPay;
+  const net=totalRev-totalOut;
+  const expIns=insurance.filter(i=>expiryStatus(i.expiryDate)==="Expired").length;
+  const soonIns=insurance.filter(i=>expiryStatus(i.expiryDate)==="Expiring Soon").length;
+  const openLogs=logs.filter(l=>l.status==="Open").length;
+  const expRW=carInfo.filter(c=>expiryStatus(c.roadworthyExpiry)==="Expired"||expiryStatus(c.roadworthyExpiry)==="Expiring Soon").length;
+
+  return <div className="fade">
+    <PageTitle title="General Manager Dashboard" sub={`${new Date().toDateString()} — ${thisWeek}`}/>
+    {(expIns>0||soonIns>0||openLogs>0||expRW>0)&&<Alert type="warn">
+      {expIns>0&&<span><b>{expIns}</b> expired insurance. </span>}
+      {soonIns>0&&<span><b>{soonIns}</b> insurance expiring soon. </span>}
+      {openLogs>0&&<span><b>{openLogs}</b> open incidents. </span>}
+      {expRW>0&&<span><b>{expRW}</b> roadworthy certificates expired/expiring soon.</span>}
+    </Alert>}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))",gap:14,marginBottom:22}}>
+      <Metric label="Total Drivers" value={drivers.length} sub="Active fleet drivers"/>
+      <Metric label="Week Revenue" value={GHC(totalRev)} sub={`${weekSales.length} submissions`} color="#e9f5ee"/>
+      <Metric label="Week Expenses" value={GHC(totalOut)} sub="Oil + Parts + Payments" color="#fceaea"/>
+      <Metric label="Net Profit" value={GHC(net)} sub="This week" color={net>=0?"#e9f5ee":"#fceaea"}/>
+      <Metric label="Open Issues" value={openLogs} sub="Incidents/accidents" color={openLogs>0?C.wBg:"#f4f6f9"}/>
+      <Metric label="Fleet Cars" value={carInfo.length} sub="Registered vehicles"/>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18}}>
       <Card>
-        <Row title="Top Earners — This Week"/>
-        <table><THead cols={["Driver","Trips","Revenue"]}/>
-        <tbody>{[...ws].sort((a,b)=>b.revenue-a.revenue).map((s,i)=><TRow key={i} cells={[s.driver,s.trips,<span style={{color:C.success,fontWeight:600}}>{GHC(s.revenue)}</span>]}/>)}</tbody></table>
+        <SectionTitle title="Top Earners This Week"/>
+        <table><TH cols={["Driver","Trips","Revenue"]}/>
+        <tbody>{[...weekSales].sort((a,b)=>b.amount-a.amount).slice(0,6).map((s,i)=>{
+          const drv=drivers.find(d=>d.id===s.driverID);
+          return <TR key={i} cells={[drv?.name||s.driverID,s.trips,<span style={{color:C.success,fontWeight:600}}>{GHC(s.amount)}</span>]}/>;
+        })}</tbody></table>
       </Card>
       <Card>
-        <Row title="Expense Breakdown"/>
-        {[["Oil",tO],["Salaries",tS],["Parts",tP],["Payments to Others",tPy],["Other Expenses",tE]].map(([l,v])=>
-          <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}><span style={{color:C.muted}}>{l}</span><span style={{fontWeight:600}}>{GHC(v)}</span></div>)}
-        <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0 0",fontSize:14,fontWeight:700}}><span>Total Out</span><span style={{color:C.danger}}>{GHC(out)}</span></div>
+        <SectionTitle title="Fleet Alerts"/>
+        {insurance.map(ins=>{const st=expiryStatus(ins.expiryDate);return(st==="Expired"||st==="Expiring Soon")&&<div key={ins.id} style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`,fontSize:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span><b>{ins.carNumber}</b> — {ins.insurer}</span><SBdg s={st}/></div>;})}
+        {carInfo.map(c=>{const st=expiryStatus(c.roadworthyExpiry);return(st==="Expired"||st==="Expiring Soon")&&<div key={c.id} style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`,fontSize:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span><b>{c.carNumber}</b> — Roadworthy</span><SBdg s={st}/></div>;})}
+        {expIns===0&&soonIns===0&&expRW===0&&<p style={{fontSize:13,color:C.muted,padding:"8px 0"}}>✓ No fleet alerts</p>}
       </Card>
     </div>
-    <Card>
-      <Row title="Recent Issues"/>
-      <table><THead cols={["Date","Car","Driver","Type","Status"]}/>
-      <tbody>{logs.slice(0,4).map((l,i)=><TRow key={i} cells={[l.date,l.carID,l.driver,l.type,<SBdg s={l.status}/>]}/>)}</tbody></table>
-    </Card>
   </div>;
 }
 
-/* ── FINANCIAL CHART ─────────────────────────────────── */
-function Finance({sales,expenses,oil,salaries,parts,payments}){
-  const bRef=useRef(),pRef=useRef(),lRef=useRef(),charts=useRef({});
-  const allW=[...new Set([...sales,...oil,...salaries,...parts,...payments,...expenses].map(x=>x.week))].slice(0,5).reverse();
-  const wd=allW.map(wk=>({wk,rev:sales.filter(s=>s.week===wk).reduce((a,b)=>a+b.revenue,0),oil:oil.filter(o=>o.week===wk).reduce((a,b)=>a+b.total,0),sal:salaries.filter(s=>s.week===wk).reduce((a,b)=>a+b.total,0),pts:parts.filter(p=>p.week===wk).reduce((a,b)=>a+b.total,0),exp:expenses.filter(e=>e.week===wk).reduce((a,b)=>a+b.amount,0),pay:payments.filter(p=>p.week===wk).reduce((a,b)=>a+b.amount,0)}));
-  const labs=allW.map(w=>w.replace(/\(.*\)/,"").trim());
+function GMFinance({driverSales,opsSales,parts,oil,payments}){
+  const bRef=useRef(),charts=useRef({});
+  const wks=WEEKS.slice(0,8).reverse();
+  const wd=wks.map(wk=>({
+    wk,rev:driverSales.filter(s=>s.week===wk).reduce((a,b)=>a+Number(b.amount||0),0),
+    oil:oil.filter(o=>o.week===wk).reduce((a,b)=>a+Number(b.total||0),0),
+    pts:parts.filter(p=>p.week===wk).reduce((a,b)=>a+Number(b.total||0),0),
+    pay:payments.filter(p=>p.week===wk).reduce((a,b)=>a+Number(b.amount||0),0),
+  }));
+  const labs=wks.map(w=>w.replace(/\d{4}/,"").trim());
   useEffect(()=>{
     Object.values(charts.current).forEach(c=>c?.destroy());
-    charts.current.bar=new Chart(bRef.current,{type:"bar",data:{labels:labs,datasets:[{label:"Revenue",data:wd.map(d=>d.rev),backgroundColor:"rgba(26,122,74,0.8)",borderRadius:4},{label:"Total Out",data:wd.map(d=>d.oil+d.sal+d.pts+d.exp+d.pay),backgroundColor:"rgba(185,48,48,0.75)",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"top"}},scales:{y:{beginAtZero:true,ticks:{callback:v=>"GH₵"+v.toLocaleString()}},x:{grid:{display:false}}}}});
-    const lat=wd[wd.length-1]||{};
-    charts.current.pie=new Chart(pRef.current,{type:"doughnut",data:{labels:["Oil","Salaries","Parts","Other Exp","Payments"],datasets:[{data:[lat.oil||0,lat.sal||0,lat.pts||0,lat.exp||0,lat.pay||0],backgroundColor:["#e8a020","#1a3a5c","#e05050","#1a5cbf","#1a7a4a"],borderWidth:2,borderColor:"#fff"}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"right",labels:{font:{size:11},padding:10}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: GH₵${ctx.parsed.toLocaleString()}`}}}}});
-    charts.current.line=new Chart(lRef.current,{type:"line",data:{labels:labs,datasets:[{label:"Net Profit",data:wd.map(d=>d.rev-(d.oil+d.sal+d.pts+d.exp+d.pay)),borderColor:"#1a3a5c",backgroundColor:"rgba(26,58,92,0.08)",fill:true,tension:0.3,pointRadius:5},{label:"Revenue",data:wd.map(d=>d.rev),borderColor:"#1a7a4a",tension:0.3,pointRadius:4,borderDash:[5,3]}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"top"}},scales:{y:{ticks:{callback:v=>"GH₵"+v.toLocaleString()}},x:{grid:{display:false}}}}});
+    if(bRef.current){charts.current.b=new Chart(bRef.current,{type:"bar",data:{labels:labs,datasets:[{label:"Revenue",data:wd.map(d=>d.rev),backgroundColor:"rgba(26,122,74,0.8)",borderRadius:4},{label:"Total Out",data:wd.map(d=>d.oil+d.pts+d.pay),backgroundColor:"rgba(185,48,48,0.75)",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"top"}},scales:{y:{beginAtZero:true,ticks:{callback:v=>"GH₵"+v.toLocaleString()}},x:{grid:{display:false}}}}});}
     return()=>Object.values(charts.current).forEach(c=>c?.destroy());
   },[JSON.stringify(wd)]);
-  const lat=wd[wd.length-1]||{};const out=(lat.oil||0)+(lat.sal||0)+(lat.pts||0)+(lat.exp||0)+(lat.pay||0);const net=(lat.rev||0)-out;
-  return <div style={{padding:24,display:"flex",flexDirection:"column",gap:20}}>
-    <h1 style={{fontSize:20,fontWeight:700,color:C.primary,margin:0}}>Financial Charts — Money In vs Out</h1>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:14}}>
-      <Metric label="Latest Revenue" value={GHC(lat.rev||0)} sub="Money In" color="#e9f5ee"/>
-      <Metric label="Latest Expenses" value={GHC(out)} sub="Money Out" color="#fceaea"/>
-      <Metric label="Net Profit" value={GHC(net)} sub={net>=0?"Positive":"Loss"} color={net>=0?"#e9f5ee":"#fceaea"}/>
+  const tot=wd.reduce((a,d)=>({rev:a.rev+d.rev,out:a.out+d.oil+d.pts+d.pay}),{rev:0,out:0});
+  return <div className="fade">
+    <PageTitle title="Financial Overview" sub="Revenue and expenses across all weeks"/>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))",gap:14,marginBottom:22}}>
+      <Metric label="Total Revenue (8wk)" value={GHC(tot.rev)} color="#e9f5ee"/>
+      <Metric label="Total Expenses (8wk)" value={GHC(tot.out)} color="#fceaea"/>
+      <Metric label="Net Profit (8wk)" value={GHC(tot.rev-tot.out)} color={(tot.rev-tot.out)>=0?"#e9f5ee":"#fceaea"}/>
     </div>
-    <Card><h3 style={{fontSize:14,fontWeight:600,color:C.primary,marginBottom:14}}>Revenue vs Total Expenses by Week</h3><div style={{height:280}}><canvas ref={bRef}/></div></Card>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18}}>
-      <Card><h3 style={{fontSize:14,fontWeight:600,color:C.primary,marginBottom:14}}>Expense Breakdown — Latest Week</h3><div style={{height:240}}><canvas ref={pRef}/></div></Card>
-      <Card><h3 style={{fontSize:14,fontWeight:600,color:C.primary,marginBottom:14}}>Net Profit Trend</h3><div style={{height:240}}><canvas ref={lRef}/></div></Card>
-    </div>
+    <Card style={{marginBottom:20}}>
+      <SectionTitle title="Revenue vs Expenses by Week"/>
+      <div style={{height:300}}><canvas ref={bRef}/></div>
+    </Card>
     <Card>
-      <h3 style={{fontSize:14,fontWeight:600,color:C.primary,marginBottom:14}}>Weekly Summary</h3>
-      <div style={{overflowX:"auto"}}><table><THead cols={["Week","Revenue","Oil","Salaries","Parts","Expenses","Payments","Total Out","Net"]}/>
-      <tbody>{wd.map((d,i)=>{const o=d.oil+d.sal+d.pts+d.exp+d.pay,n=d.rev-o;return<TRow key={i} cells={[d.wk,<span style={{color:C.success,fontWeight:600}}>{GHC(d.rev)}</span>,GHC(d.oil),GHC(d.sal),GHC(d.pts),GHC(d.exp),GHC(d.pay),<span style={{color:C.danger,fontWeight:600}}>{GHC(o)}</span>,<span style={{color:n>=0?C.success:C.danger,fontWeight:700}}>{GHC(n)}</span>]}/>;})}</tbody></table></div>
+      <SectionTitle title="Weekly Breakdown"/>
+      <div style={{overflowX:"auto"}}><table><TH cols={["Week","Revenue","Oil","Parts","Payments","Total Out","Net"]}/>
+      <tbody>{wd.slice().reverse().map((d,i)=>{const o=d.oil+d.pts+d.pay,n=d.rev-o;return<TR key={i} cells={[d.wk,<span style={{color:C.success,fontWeight:600}}>{GHC(d.rev)}</span>,GHC(d.oil),GHC(d.pts),GHC(d.pay),<span style={{color:C.danger,fontWeight:600}}>{GHC(o)}</span>,<span style={{color:n>=0?C.success:C.danger,fontWeight:700}}>{GHC(n)}</span>]}/>;})}</tbody></table></div>
     </Card>
   </div>;
 }
 
-/* ── FLEET ───────────────────────────────────────────── */
-function Fleet({cars,setCars}){
-  const blank={id:"",plate:"",make:"",driver:"",driverID:"",status:"Active"};
-  const [M,setM]=useState(null),[del,setDel]=useState(null);
-  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
-  const save=()=>{const d=M.data;if(!d.id||!d.plate||!d.driver)return alert("Fill required fields");const next=M.mode==="add"?[...cars,d]:cars.map(c=>c.id===d.id?d:c);setCars(next);saveData("cars",next);setM(null);};
-  const remove=id=>{const next=cars.filter(c=>c.id!==id);setCars(next);saveData("cars",next);setDel(null);};
-  return <div style={{padding:24}}>
-    <Row title="Fleet & Driver Registry" action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Vehicle</Btn>}/>
-    <Card><div style={{overflowX:"auto"}}><table><THead cols={["Car ID","Plate","Make/Model","Driver","Driver ID","Status","Actions"]}/>
-    <tbody>{cars.map((c,i)=><TRow key={i} cells={[<b style={{color:C.primary}}>{c.id}</b>,c.plate,c.make,c.driver,<span style={{fontFamily:"monospace",fontSize:11}}>{c.driverID}</span>,<SBdg s={c.status}/>,<ActBtns onEdit={()=>setM({mode:"edit",data:{...c}})} onDel={()=>setDel(c.id)}/>]}/>)}</tbody></table></div></Card>
-    {M&&<Modal title={M.mode==="add"?"Add Vehicle":"Edit Vehicle"} onClose={()=>setM(null)}>
-      <Grid><Inp label="Car ID" value={M.data.id} onChange={f("id")} req/><Inp label="Plate" value={M.data.plate} onChange={f("plate")} req/><Inp label="Make/Model" value={M.data.make} onChange={f("make")}/><Inp label="Driver Name" value={M.data.driver} onChange={f("driver")} req/><Inp label="Driver ID" value={M.data.driverID} onChange={f("driverID")}/><Inp label="Status" value={M.data.status} onChange={f("status")} opts={["Active","Maintenance","Inactive"]}/></Grid>
-      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
-    </Modal>}
-    {del&&<ConfirmModal msg="Remove this vehicle from the registry?" onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
+function GMFleet({carInfo,drivers,insurance}){
+  return <div className="fade">
+    <PageTitle title="Fleet Overview" sub="All registered vehicles and their status"/>
+    <Card>
+      <div style={{overflowX:"auto"}}><table><TH cols={["Car No.","Plate","Make","Driver","Roadworthy Issued","Roadworthy Expiry","RW Status","Insurance Status"]}/>
+      <tbody>{carInfo.map((c,i)=>{
+        const drv=drivers.find(d=>d.id===c.driverID);
+        const ins=insurance.find(x=>x.carNumber===c.carNumber);
+        const rwSt=expiryStatus(c.roadworthyExpiry);
+        const insSt=ins?expiryStatus(ins.expiryDate):"Unknown";
+        return <TR key={i} cells={[<b style={{color:C.primary}}>{c.carNumber}</b>,c.plate,c.make,drv?.name||"—",c.roadworthyIssued||"—",c.roadworthyExpiry||"—",<SBdg s={rwSt}/>,<SBdg s={insSt}/>]}/>;
+      })}</tbody></table></div>
+    </Card>
   </div>;
 }
 
-/* ── SALES ───────────────────────────────────────────── */
-function Sales({sales,setSales,carIDs}){
-  const blank={week:WEEKS[0],driver:"",carID:carIDs[0]||"",trips:"",revenue:"",fuel:""};
-  const [M,setM]=useState(null),[del,setDel]=useState(null);
-  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
-  const save=()=>{const d=M.data;if(!d.driver||!d.revenue)return alert("Fill required fields");const net=Number(d.revenue)-Number(d.fuel||0);const item={...d,id:M.mode==="add"?uid():M.data.id,trips:Number(d.trips),revenue:Number(d.revenue),fuel:Number(d.fuel||0),net};const next=M.mode==="add"?[...sales,item]:sales.map(s=>s.id===item.id?item:s);setSales(next);saveData("sales",next);setM(null);};
-  const remove=id=>{const next=sales.filter(s=>s.id!==id);setSales(next);saveData("sales",next);setDel(null);};
-  const weeks=[...new Set(sales.map(s=>s.week))];
-  return <div style={{padding:24}}>
-    <Row title="Weekly Sales by Driver" action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Record</Btn>}/>
-    {weeks.map(wk=>{const rows=sales.filter(s=>s.week===wk);const tot=rows.reduce((a,b)=>a+b.revenue,0);return<Card key={wk} style={{marginBottom:18}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:14,alignItems:"center"}}><span style={{fontWeight:700,fontSize:14,color:C.primary}}>{wk}</span><span style={{fontSize:13,color:C.success,fontWeight:600}}>Total: {GHC(tot)}</span></div>
-      <div style={{overflowX:"auto"}}><table><THead cols={["Driver","Car","Trips","Revenue","Fuel","Net",""]}/>
-      <tbody>{rows.map((r,i)=><TRow key={i} cells={[r.driver,r.carID,r.trips,<span style={{color:C.info,fontWeight:600}}>{GHC(r.revenue)}</span>,<span style={{color:C.danger}}>{GHC(r.fuel)}</span>,<span style={{color:C.success,fontWeight:600}}>{GHC(r.net)}</span>,<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,trips:String(r.trips),revenue:String(r.revenue),fuel:String(r.fuel)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table></div>
-    </Card>;})}
-    {M&&<Modal title={M.mode==="add"?"Add Sales Record":"Edit Sales Record"} onClose={()=>setM(null)}>
-      <Grid><Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS}/><Inp label="Driver" value={M.data.driver} onChange={f("driver")} req/><Inp label="Car ID" value={M.data.carID} onChange={f("carID")} opts={carIDs}/><Inp label="Trips" value={M.data.trips} onChange={f("trips")} type="number"/><Inp label="Revenue (GH₵)" value={M.data.revenue} onChange={f("revenue")} type="number" req/><Inp label="Fuel Cost (GH₵)" value={M.data.fuel} onChange={f("fuel")} type="number"/></Grid>
-      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
-    </Modal>}
-    {del&&<ConfirmModal msg="Delete this sales record?" onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
-  </div>;
-}
-
-/* ── PAYMENTS TO OTHERS ──────────────────────────────── */
-function Payments({payments,setPayments}){
-  const blank={week:WEEKS[0],payee:"",purpose:"",amount:"",method:"Cash",status:"Pending"};
-  const [M,setM]=useState(null),[del,setDel]=useState(null);
-  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
-  const save=()=>{const d=M.data;if(!d.payee||!d.amount)return alert("Fill required fields");const item={...d,id:M.mode==="add"?uid():d.id,amount:Number(d.amount)};const next=M.mode==="add"?[...payments,item]:payments.map(p=>p.id===item.id?item:p);setPayments(next);saveData("payments",next);setM(null);};
-  const remove=id=>{const next=payments.filter(p=>p.id!==id);setPayments(next);saveData("payments",next);setDel(null);};
-  const toggle=id=>{const next=payments.map(x=>x.id===id?{...x,status:x.status==="Paid"?"Pending":"Paid"}:x);setPayments(next);saveData("payments",next);};
-  const weeks=[...new Set(payments.map(p=>p.week))];
-  const grand=payments.reduce((a,b)=>a+b.amount,0);
-  return <div style={{padding:24}}>
-    <Row title="Weekly Payments to Others" action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Payment</Btn>}/>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:14,marginBottom:20}}>
-      <Metric label="Total (All Weeks)" value={GHC(grand)} sub="Combined"/>
-      <Metric label="Pending" value={GHC(payments.filter(p=>p.status==="Pending").reduce((a,b)=>a+b.amount,0))} sub="Awaiting" color={payments.some(p=>p.status==="Pending")?C.wBg:"#f4f6f9"}/>
-      <Metric label="This Week" value={GHC(payments.filter(p=>p.week===WEEKS[0]).reduce((a,b)=>a+b.amount,0))} sub={WEEKS[0]}/>
+function GMDrivers({drivers,carInfo,driverSales}){
+  const [sel,setSel]=useState(null);
+  const driver=sel?drivers.find(d=>d.id===sel):null;
+  const car=driver?carInfo.find(c=>c.driverID===driver.id):null;
+  const sales=driver?driverSales.filter(s=>s.driverID===driver.id):[];
+  const totalEarned=sales.reduce((a,b)=>a+Number(b.amount||0),0);
+  return <div className="fade">
+    <PageTitle title="Driver Records" sub="Click a driver to view their full profile"/>
+    <div style={{display:"grid",gridTemplateColumns:"280px 1fr",gap:18}}>
+      <Card style={{padding:"12px 0",alignSelf:"start"}}>
+        {drivers.map(d=><div key={d.id} onClick={()=>setSel(d.id===sel?null:d.id)} style={{padding:"12px 18px",cursor:"pointer",background:sel===d.id?ROLE_BG.driver:"transparent",borderLeft:sel===d.id?`3px solid ${C.success}`:"3px solid transparent",display:"flex",alignItems:"center",gap:10,transition:"all 0.1s"}}>
+          <div style={{width:36,height:36,borderRadius:50,background:C.success,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:13,flexShrink:0}}>{d.name.charAt(0)}</div>
+          <div><div style={{fontWeight:600,fontSize:13}}>{d.name}</div><div style={{fontSize:11,color:C.muted}}>{d.driverID}</div></div>
+        </div>)}
+        {drivers.length===0&&<p style={{padding:"16px 18px",fontSize:13,color:C.muted}}>No drivers yet. Add drivers in User Management.</p>}
+      </Card>
+      {driver?<div style={{display:"flex",flexDirection:"column",gap:16}}>
+        <Card>
+          <SectionTitle title={`${driver.name} — Profile`}/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:16}}>
+            <Metric label="Driver ID" value={driver.driverID||"—"} sub="Identification"/>
+            <Metric label="Username" value={driver.username} sub="Login"/>
+            <Metric label="Total Earned" value={GHC(totalEarned)} sub="All time" color="#e9f5ee"/>
+          </div>
+          {car?<><SectionTitle title="Vehicle & Documents"/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,fontSize:13}}>
+            {[["Car Number",car.carNumber],["Plate",car.plate],["Make",car.make],["Colour",car.color],["Licence No.",car.licenseNo],["Licence Expiry",car.licenseExpiry],["Roadworthy Issued",car.roadworthyIssued],["Roadworthy Expiry",car.roadworthyExpiry],["RW Status",<SBdg s={expiryStatus(car.roadworthyExpiry)}/>]].map(([l,v],i)=><div key={i} style={{background:"#f8fafd",borderRadius:8,padding:"10px 12px"}}><div style={{fontSize:11,color:C.muted,marginBottom:3}}>{l}</div><div style={{fontWeight:600}}>{v}</div></div>)}
+          </div></>:<Alert type="info">This driver has not submitted car information yet.</Alert>}
+        </Card>
+        <Card>
+          <SectionTitle title="Sales History"/>
+          {sales.length>0?<table><TH cols={["Week","Trips","Amount","Submitted"]}/>
+          <tbody>{[...sales].reverse().map((s,i)=><TR key={i} cells={[s.week,s.trips,<span style={{color:C.success,fontWeight:600}}>{GHC(s.amount)}</span>,s.submittedAt||"—"]}/>)}</tbody></table>
+          :<p style={{fontSize:13,color:C.muted}}>No sales submitted yet.</p>}
+        </Card>
+      </div>:<Card><p style={{color:C.muted,fontSize:13}}>← Select a driver to view their full profile, car info, and sales history.</p></Card>}
     </div>
-    {weeks.map(wk=>{const rows=payments.filter(p=>p.week===wk);const tot=rows.reduce((a,b)=>a+b.amount,0);return<Card key={wk} style={{marginBottom:18}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:14,alignItems:"center"}}><span style={{fontWeight:700,fontSize:14,color:C.primary}}>{wk}</span><span style={{fontSize:13,color:C.danger,fontWeight:600}}>Total: {GHC(tot)}</span></div>
-      <div style={{overflowX:"auto"}}><table><THead cols={["Payee","Purpose","Amount","Method","Status",""]}/>
-      <tbody>{rows.map((r,i)=><TRow key={i} cells={[<b>{r.payee}</b>,<span style={{color:C.muted,fontSize:12}}>{r.purpose||"—"}</span>,<span style={{color:C.danger,fontWeight:600}}>{GHC(r.amount)}</span>,<Bdg label={r.method} color={C.info} bg={C.iBg} border="#a5c2f2"/>,<span onClick={()=>toggle(r.id)} style={{cursor:"pointer"}}><SBdg s={r.status}/></span>,<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,amount:String(r.amount)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table></div>
-    </Card>;})}
-    {M&&<Modal title={M.mode==="add"?"Add Payment":"Edit Payment"} onClose={()=>setM(null)}>
-      <Grid><Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS}/><Inp label="Payee" value={M.data.payee} onChange={f("payee")} req/><Inp label="Purpose" value={M.data.purpose} onChange={f("purpose")}/><Inp label="Amount (GH₵)" value={M.data.amount} onChange={f("amount")} type="number" req/><Inp label="Method" value={M.data.method} onChange={f("method")} opts={["Cash","Mobile Money","Bank Transfer","Cheque"]}/><Inp label="Status" value={M.data.status} onChange={f("status")} opts={["Pending","Paid"]}/></Grid>
-      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
-    </Modal>}
-    {del&&<ConfirmModal msg="Delete this payment record?" onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
   </div>;
 }
 
-/* ── OTHER EXPENSES ──────────────────────────────────── */
-function Expenses({expenses,setExpenses}){
-  const blank={week:WEEKS[0],category:"",recipient:"",amount:"",note:""};
-  const [M,setM]=useState(null),[del,setDel]=useState(null);
+function GMUsers({users,saveUsers,currentUser}){
+  const [M,setM]=useState(null),[del,setDel]=useState(null),[err,setErr]=useState("");
+  const blank={role:ROLES.DRIVER,username:"",password:"",name:"",driverID:"",email:""};
   const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
-  const save=()=>{const d=M.data;if(!d.category||!d.amount)return alert("Fill required fields");const item={...d,id:M.mode==="add"?uid():d.id,amount:Number(d.amount)};const next=M.mode==="add"?[...expenses,item]:expenses.map(e=>e.id===item.id?item:e);setExpenses(next);saveData("expenses",next);setM(null);};
-  const remove=id=>{const next=expenses.filter(e=>e.id!==id);setExpenses(next);saveData("expenses",next);setDel(null);};
-  const weeks=[...new Set(expenses.map(e=>e.week))];
-  return <div style={{padding:24}}>
-    <Row title="Other Expenses" action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Expense</Btn>}/>
-    {weeks.map(wk=>{const rows=expenses.filter(e=>e.week===wk);const tot=rows.reduce((a,b)=>a+b.amount,0);return<Card key={wk} style={{marginBottom:18}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:14,alignItems:"center"}}><span style={{fontWeight:700,fontSize:14,color:C.primary}}>{wk}</span><span style={{fontSize:13,color:C.danger,fontWeight:600}}>Total: {GHC(tot)}</span></div>
-      <div style={{overflowX:"auto"}}><table><THead cols={["Category","Recipient","Amount","Note",""]}/>
-      <tbody>{rows.map((r,i)=><TRow key={i} cells={[<Bdg label={r.category} color={C.info} bg={C.iBg} border="#b5c8f0"/>,r.recipient||"—",<span style={{color:C.danger,fontWeight:600}}>{GHC(r.amount)}</span>,<span style={{color:C.muted,fontSize:12}}>{r.note||"—"}</span>,<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,amount:String(r.amount)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table></div>
-    </Card>;})}
-    {M&&<Modal title={M.mode==="add"?"Add Expense":"Edit Expense"} onClose={()=>setM(null)}>
-      <Grid><Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS}/><Inp label="Category" value={M.data.category} onChange={f("category")} opts={["Road Tax","Tolls","Cleaning","Parking","Repairs","Other"]} req/><Inp label="Recipient" value={M.data.recipient} onChange={f("recipient")}/><Inp label="Amount (GH₵)" value={M.data.amount} onChange={f("amount")} type="number" req/><Full><Inp label="Note" value={M.data.note} onChange={f("note")}/></Full></Grid>
+  const save=()=>{
+    const d=M.data;
+    if(!d.username||!d.password||!d.name)return setErr("Name, username and password are required.");
+    if(M.mode==="add"){
+      const exists=users.find(u=>u.username===d.username.trim());
+      if(exists)return setErr("Username already exists.");
+      saveUsers([...users,{...d,id:uid(),username:d.username.trim(),createdAt:today()}]);
+    }else{
+      saveUsers(users.map(u=>u.id===M.data.id?{...d,id:M.data.id}:u));
+    }
+    setM(null);setErr("");
+  };
+  const remove=id=>{saveUsers(users.filter(u=>u.id!==id));setDel(null);};
+
+  const roleGroups=[{role:ROLES.GM,label:"General Managers",icon:"👑"},{role:ROLES.OPS,label:"Operational Managers",icon:"🔧"},{role:ROLES.DRIVER,label:"Drivers",icon:"🚐"}];
+
+  return <div className="fade">
+    <PageTitle title="User Management" sub="Add, edit, or remove system users and their credentials"
+      action={<Btn onClick={()=>{setErr("");setM({mode:"add",data:{...blank}});}}>+ Add User</Btn>}/>
+    {roleGroups.map(({role,label,icon})=>{
+      const group=users.filter(u=>u.role===role);
+      return <Card key={role} style={{marginBottom:18}}>
+        <SectionTitle title={`${icon} ${label} (${group.length})`}/>
+        {group.length===0?<p style={{fontSize:13,color:C.muted}}>No {label.toLowerCase()} yet.</p>:
+        <table><TH cols={["Name",role===ROLES.DRIVER?"Driver ID":"","Username","Email","Added","Actions"]}/>
+        <tbody>{group.map((u,i)=><TR key={i} cells={[<b>{u.name}</b>,role===ROLES.DRIVER?<span style={{fontFamily:"monospace",fontSize:12}}>{u.driverID||"—"}</span>:"",u.username,u.email||"—",u.createdAt||"—",
+          u.id!==currentUser.id?<ActBtns onEdit={()=>{setErr("");setM({mode:"edit",data:{...u}});}} onDel={()=>setDel(u.id)}/>:<span style={{fontSize:11,color:C.muted}}>You</span>]}/>)}</tbody></table>}
+      </Card>;
+    })}
+    {M&&<Modal title={M.mode==="add"?"Add New User":"Edit User"} onClose={()=>setM(null)}>
+      {err&&<Alert type="danger">{err}</Alert>}
+      <FormGrid>
+        <Inp label="Full Name" value={M.data.name} onChange={f("name")} req/>
+        <Inp label="Role" value={M.data.role} onChange={f("role")} opts={[{value:ROLES.GM,label:"General Manager"},{value:ROLES.OPS,label:"Operational Manager"},{value:ROLES.DRIVER,label:"Driver"}]} req/>
+        <Inp label="Username" value={M.data.username} onChange={f("username")} req ph="login username"/>
+        <Inp label="Password" value={M.data.password} onChange={f("password")} type="password" req/>
+        {M.data.role===ROLES.DRIVER&&<Inp label="Driver ID" value={M.data.driverID||""} onChange={f("driverID")} ph="e.g. DRV-106"/>}
+        <Inp label="Email (optional)" value={M.data.email||""} onChange={f("email")} type="email"/>
+      </FormGrid>
       <FormFooter onCancel={()=>setM(null)} onSave={save}/>
     </Modal>}
-    {del&&<ConfirmModal msg="Delete this expense record?" onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
+    {del&&<ConfirmDel msg="This user account will be permanently deleted. Their submitted data will remain." onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
   </div>;
 }
 
-/* ── OIL ─────────────────────────────────────────────── */
-function Oil({oil,setOil}){
-  const blank={week:WEEKS[0],oilType:"",litres:"",costPerL:"",supplier:"",note:""};
-  const [M,setM]=useState(null),[del,setDel]=useState(null);
-  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
-  const save=()=>{const d=M.data;if(!d.oilType||!d.litres)return alert("Fill required fields");const total=Number(d.litres)*Number(d.costPerL||0);const item={...d,id:M.mode==="add"?uid():d.id,litres:Number(d.litres),costPerL:Number(d.costPerL||0),total};const next=M.mode==="add"?[...oil,item]:oil.map(o=>o.id===item.id?item:o);setOil(next);saveData("oil",next);setM(null);};
-  const remove=id=>{const next=oil.filter(o=>o.id!==id);setOil(next);saveData("oil",next);setDel(null);};
-  const grand=oil.reduce((a,b)=>a+b.total,0);
-  return <div style={{padding:24}}>
-    <Row title="Oil — Weekly Fleet Purchase" action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Purchase</Btn>}/>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:14,marginBottom:20}}>
-      <Metric label="Total Oil Spend" value={GHC(grand)} sub="All weeks"/><Metric label="Avg per Week" value={GHC(Math.round(grand/(oil.length||1)))} sub={`${oil.length} weeks`}/><Metric label="Last Purchase" value={oil[0]?`${oil[0].litres}L`:"—"} sub={oil[0]?.week||""}/>
-    </div>
-    <Card><div style={{overflowX:"auto"}}><table><THead cols={["Week","Oil Type","Litres","Cost/L","Supplier","Note","Total",""]}/>
-    <tbody>{oil.map((r,i)=><TRow key={i} cells={[r.week,r.oilType,`${r.litres}L`,GHC(r.costPerL),r.supplier||"—",<span style={{color:C.muted,fontSize:12}}>{r.note||"—"}</span>,<span style={{color:C.danger,fontWeight:700}}>{GHC(r.total)}</span>,<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,litres:String(r.litres),costPerL:String(r.costPerL)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table>
-    <div style={{borderTop:`1px solid ${C.border}`,marginTop:8,paddingTop:10,display:"flex",justifyContent:"flex-end",gap:12,fontSize:13}}><span style={{color:C.muted}}>Grand Total:</span><span style={{fontWeight:700,color:C.danger}}>{GHC(grand)}</span></div></div></Card>
-    {M&&<Modal title={M.mode==="add"?"Add Oil Purchase":"Edit Oil Purchase"} onClose={()=>setM(null)}>
-      <Grid><Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS}/><Inp label="Oil Type" value={M.data.oilType} onChange={f("oilType")} opts={["5W-30 Synthetic","10W-40 Semi","15W-40 Mineral","5W-40 Full Syn"]} req/><Inp label="Total Litres" value={M.data.litres} onChange={f("litres")} type="number" req/><Inp label="Cost/Litre (GH₵)" value={M.data.costPerL} onChange={f("costPerL")} type="number"/><Inp label="Supplier" value={M.data.supplier} onChange={f("supplier")}/><Inp label="Note" value={M.data.note} onChange={f("note")}/></Grid>
-      {M.data.litres&&M.data.costPerL&&<div style={{marginBottom:14,padding:"10px 14px",background:"#eef2f8",borderRadius:8,fontSize:13}}>Total: <b style={{color:C.primary}}>{GHC(Number(M.data.litres)*Number(M.data.costPerL))}</b></div>}
-      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
-    </Modal>}
-    {del&&<ConfirmModal msg="Delete this oil purchase record?" onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
+function GMAllSales({driverSales,drivers,opsSales}){
+  const weeks=[...new Set(driverSales.map(s=>s.week))];
+  return <div className="fade">
+    <PageTitle title="All Sales Records" sub="Driver-submitted weekly sales across the entire fleet"/>
+    {weeks.map(wk=>{
+      const rows=driverSales.filter(s=>s.week===wk);
+      const tot=rows.reduce((a,b)=>a+Number(b.amount||0),0);
+      const trips=rows.reduce((a,b)=>a+Number(b.trips||0),0);
+      return <Card key={wk} style={{marginBottom:18}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <span style={{fontWeight:700,fontSize:14,color:C.primary}}>{wk}</span>
+          <div style={{display:"flex",gap:16,fontSize:13}}>
+            <span style={{color:C.muted}}>Trips: <b>{trips}</b></span>
+            <span style={{color:C.success,fontWeight:700}}>{GHC(tot)}</span>
+          </div>
+        </div>
+        <table><TH cols={["Driver","Driver ID","Trips","Amount","Notes","Submitted"]}/>
+        <tbody>{rows.map((r,i)=>{const drv=drivers.find(d=>d.id===r.driverID);return<TR key={i} cells={[drv?.name||r.driverID,drv?.driverID||"—",r.trips,<span style={{color:C.success,fontWeight:600}}>{GHC(r.amount)}</span>,r.notes||"—",r.submittedAt||"—"]}/>;})}</tbody></table>
+      </Card>;
+    })}
+    {weeks.length===0&&<Card><p style={{color:C.muted,fontSize:13}}>No sales submitted yet.</p></Card>}
   </div>;
 }
 
-/* ── SALARIES ────────────────────────────────────────── */
-function Salaries({salaries,setSalaries}){
-  const blank={week:WEEKS[0],driver:"",base:"",bonus:"",deductions:"",status:"Pending"};
-  const [M,setM]=useState(null),[del,setDel]=useState(null);
-  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
-  const save=()=>{const d=M.data;if(!d.driver||!d.base)return alert("Fill required fields");const total=Number(d.base)+Number(d.bonus||0)-Number(d.deductions||0);const item={...d,id:M.mode==="add"?uid():d.id,base:Number(d.base),bonus:Number(d.bonus||0),deductions:Number(d.deductions||0),total};const next=M.mode==="add"?[...salaries,item]:salaries.map(s=>s.id===item.id?item:s);setSalaries(next);saveData("salaries",next);setM(null);};
-  const remove=id=>{const next=salaries.filter(s=>s.id!==id);setSalaries(next);saveData("salaries",next);setDel(null);};
-  const toggle=id=>{const next=salaries.map(x=>x.id===id?{...x,status:x.status==="Paid"?"Pending":"Paid"}:x);setSalaries(next);saveData("salaries",next);};
-  const weeks=[...new Set(salaries.map(s=>s.week))];
-  return <div style={{padding:24}}>
-    <Row title="Driver Salaries — Weekly" action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Salary</Btn>}/>
-    {weeks.map(wk=>{const rows=salaries.filter(s=>s.week===wk);const tot=rows.reduce((a,b)=>a+b.total,0);return<Card key={wk} style={{marginBottom:18}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:14,alignItems:"center"}}><span style={{fontWeight:700,fontSize:14,color:C.primary}}>{wk}</span><span style={{fontSize:13,color:C.primary,fontWeight:600}}>Payroll: {GHC(tot)}</span></div>
-      <div style={{overflowX:"auto"}}><table><THead cols={["Driver","Base","Bonus","Deductions","Total","Status",""]}/>
-      <tbody>{rows.map((r,i)=><TRow key={i} cells={[r.driver,GHC(r.base),<span style={{color:C.success}}>{GHC(r.bonus)}</span>,<span style={{color:C.danger}}>{GHC(r.deductions)}</span>,<b>{GHC(r.total)}</b>,<span onClick={()=>toggle(r.id)} style={{cursor:"pointer"}}><SBdg s={r.status}/></span>,<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,base:String(r.base),bonus:String(r.bonus),deductions:String(r.deductions)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table></div>
-    </Card>;})}
-    {M&&<Modal title={M.mode==="add"?"Add Salary":"Edit Salary"} onClose={()=>setM(null)}>
-      <Grid><Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS}/><Inp label="Driver" value={M.data.driver} onChange={f("driver")} req/><Inp label="Base Pay (GH₵)" value={M.data.base} onChange={f("base")} type="number" req/><Inp label="Bonus (GH₵)" value={M.data.bonus} onChange={f("bonus")} type="number"/><Inp label="Deductions (GH₵)" value={M.data.deductions} onChange={f("deductions")} type="number"/><Inp label="Status" value={M.data.status} onChange={f("status")} opts={["Pending","Paid"]}/></Grid>
-      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
-    </Modal>}
-    {del&&<ConfirmModal msg="Delete this salary record?" onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
+function GMInsurance({insurance}){
+  const recs=insurance.map(r=>({...r,status:expiryStatus(r.expiryDate)}));
+  const exp=recs.filter(r=>r.status==="Expired").length,soon=recs.filter(r=>r.status==="Expiring Soon").length;
+  return <div className="fade">
+    <PageTitle title="Insurance Records" sub="All vehicle insurance policies (entered by Ops Manager)"/>
+    {(exp>0||soon>0)&&<Alert type="warn"><b>{exp}</b> expired, <b>{soon}</b> expiring soon. Notify Ops Manager to renew.</Alert>}
+    <Card>
+      <div style={{overflowX:"auto"}}><table><TH cols={["Car No.","Insurer","Policy No.","Type","Issued","Expires","Premium","Status"]}/>
+      <tbody>{recs.map((r,i)=><TR key={i} cells={[<b style={{color:C.primary}}>{r.carNumber}</b>,r.insurer,r.policyNo||"—",r.type,r.issueDate||"—",r.expiryDate,<span style={{color:C.info,fontWeight:600}}>{GHC(r.premium)}</span>,<SBdg s={r.status}/>]}/>)}</tbody></table></div>
+    </Card>
   </div>;
 }
 
-/* ── CAR PARTS ───────────────────────────────────────── */
-function Parts({parts,setParts,carIDs}){
-  const blank={week:WEEKS[0],carID:carIDs[0]||"",part:"",supplier:"",qty:"",unitCost:""};
-  const [M,setM]=useState(null),[del,setDel]=useState(null);
-  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
-  const save=()=>{const d=M.data;if(!d.part||!d.qty)return alert("Fill required fields");const total=Number(d.qty)*Number(d.unitCost||0);const item={...d,id:M.mode==="add"?uid():d.id,qty:Number(d.qty),unitCost:Number(d.unitCost||0),total};const next=M.mode==="add"?[...parts,item]:parts.map(p=>p.id===item.id?item:p);setParts(next);saveData("parts",next);setM(null);};
-  const remove=id=>{const next=parts.filter(p=>p.id!==id);setParts(next);saveData("parts",next);setDel(null);};
-  return <div style={{padding:24}}>
-    <Row title="Car Parts — Expenses" action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Parts</Btn>}/>
-    <Card><div style={{overflowX:"auto"}}><table><THead cols={["Week","Car","Part","Supplier","Qty","Unit Cost","Total",""]}/>
-    <tbody>{parts.map((r,i)=><TRow key={i} cells={[r.week,<b style={{color:C.primary}}>{r.carID}</b>,r.part,r.supplier||"—",r.qty,GHC(r.unitCost),<span style={{color:C.danger,fontWeight:600}}>{GHC(r.total)}</span>,<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,qty:String(r.qty),unitCost:String(r.unitCost)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table></div></Card>
-    {M&&<Modal title={M.mode==="add"?"Add Part":"Edit Part"} onClose={()=>setM(null)}>
-      <Grid><Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS}/><Inp label="Car ID" value={M.data.carID} onChange={f("carID")} opts={carIDs}/><Inp label="Part Name" value={M.data.part} onChange={f("part")} req/><Inp label="Supplier" value={M.data.supplier} onChange={f("supplier")}/><Inp label="Qty" value={M.data.qty} onChange={f("qty")} type="number" req/><Inp label="Unit Cost (GH₵)" value={M.data.unitCost} onChange={f("unitCost")} type="number"/></Grid>
-      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
-    </Modal>}
-    {del&&<ConfirmModal msg="Delete this parts record?" onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
+function GMParts({parts}){
+  const tot=parts.reduce((a,b)=>a+Number(b.total||0),0);
+  return <div className="fade">
+    <PageTitle title="Car Parts Records" sub="All parts purchases entered by Ops Manager"/>
+    <Metric label="Total Parts Spend" value={GHC(tot)} sub="All time" color="#fceaea" /><div style={{marginBottom:18}}/>
+    <Card><div style={{overflowX:"auto"}}><table><TH cols={["Week","Car","Part","Supplier","Qty","Unit Cost","Total","Date"]}/>
+    <tbody>{parts.map((r,i)=><TR key={i} cells={[r.week,<b style={{color:C.primary}}>{r.carNumber}</b>,r.part,r.supplier||"—",r.qty,GHC(r.unitCost),<span style={{color:C.danger,fontWeight:600}}>{GHC(r.total)}</span>,r.submittedAt||"—"]}/>)}</tbody></table></div></Card>
   </div>;
 }
 
-/* ── INSURANCE ───────────────────────────────────────── */
-function Insurance({insurance,setInsurance,cars}){
-  const carIDs=cars.map(c=>c.id);
-  const blank={carID:carIDs[0]||"",insurer:"",policyNo:"",issueDate:"",expiryDate:"",premium:"",type:"Comprehensive"};
-  const [M,setM]=useState(null),[del,setDel]=useState(null);
-  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
-  const save=()=>{const d=M.data;if(!d.insurer||!d.expiryDate)return alert("Fill required fields");const plate=cars.find(c=>c.id===d.carID)?.plate||"";const item={...d,id:M.mode==="add"?uid():d.id,plate,premium:Number(d.premium||0)};const next=M.mode==="add"?[...insurance,item]:insurance.map(x=>x.id===item.id?item:x);setInsurance(next);saveData("insurance",next);setM(null);};
-  const remove=id=>{const next=insurance.filter(x=>x.id!==id);setInsurance(next);saveData("insurance",next);setDel(null);};
-  const recs=insurance.map(r=>({...r,status:getInsStatus(r.expiryDate)}));
-  const expired=recs.filter(r=>r.status==="Expired").length,soon=recs.filter(r=>r.status==="Expiring Soon").length;
-  return <div style={{padding:24}}>
-    <Row title="Vehicle Insurance Registry" action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Insurance</Btn>}/>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:14,marginBottom:20}}>
-      <Metric label="Total Vehicles" value={recs.length} sub="Registered"/><Metric label="Active" value={recs.filter(r=>r.status==="Active").length} sub="Valid" color={C.sBg}/><Metric label="Expiring Soon" value={soon} sub="≤30 days" color={soon>0?C.wBg:"#f4f6f9"}/><Metric label="Expired" value={expired} sub="Renew now" color={expired>0?C.dBg:"#f4f6f9"}/>
-    </div>
-    {(expired>0||soon>0)&&<div style={{background:C.wBg,border:`1px solid ${C.wBd}`,borderRadius:8,padding:"10px 16px",marginBottom:18,fontSize:13,color:C.wTx}}>⚠️ {expired>0&&<><b>{expired} vehicle{expired!==1?"s":""}</b> ha{expired===1?"s":"ve"} expired insurance. </>}{soon>0&&<><b>{soon}</b> expiring within 30 days.</>} Please arrange renewal.</div>}
-    <Card><div style={{overflowX:"auto"}}><table><THead cols={["Car","Plate","Insurer","Policy No.","Type","Issued","Expires","Premium","Status",""]}/>
-    <tbody>{recs.map((r,i)=><TRow key={i} cells={[<b style={{color:C.primary}}>{r.carID}</b>,r.plate,r.insurer,<span style={{fontFamily:"monospace",fontSize:11}}>{r.policyNo||"—"}</span>,<span style={{fontSize:12}}>{r.type}</span>,r.issueDate||"—",<span style={{fontWeight:600,color:r.status==="Expired"?C.danger:r.status==="Expiring Soon"?C.wTx:C.text}}>{r.expiryDate}</span>,<span style={{color:C.info,fontWeight:600}}>{GHC(r.premium)}</span>,<SBdg s={r.status}/>,<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,premium:String(r.premium)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table></div></Card>
-    {M&&<Modal title={M.mode==="add"?"Add Insurance":"Edit Insurance"} onClose={()=>setM(null)}>
-      <Grid><Inp label="Car ID" value={M.data.carID} onChange={f("carID")} opts={carIDs} req/><Inp label="Insurer" value={M.data.insurer} onChange={f("insurer")} req/><Inp label="Policy No." value={M.data.policyNo} onChange={f("policyNo")}/><Inp label="Cover Type" value={M.data.type} onChange={f("type")} opts={["Comprehensive","Third Party","Third Party Fire & Theft"]}/><Inp label="Issue Date" value={M.data.issueDate} onChange={f("issueDate")} type="date"/><Inp label="Expiry Date" value={M.data.expiryDate} onChange={f("expiryDate")} type="date" req/><Inp label="Premium (GH₵)" value={M.data.premium} onChange={f("premium")} type="number"/></Grid>
-      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
-    </Modal>}
-    {del&&<ConfirmModal msg="Delete this insurance record?" onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
+function GMOil({oil}){
+  const tot=oil.reduce((a,b)=>a+Number(b.total||0),0);
+  return <div className="fade">
+    <PageTitle title="Oil Purchase Records" sub="Fleet oil purchases entered by Ops Manager"/>
+    <Metric label="Total Oil Spend" value={GHC(tot)} sub="All time" color="#fceaea"/><div style={{marginBottom:18}}/>
+    <Card><div style={{overflowX:"auto"}}><table><TH cols={["Week","Oil Type","Litres","Cost/L","Supplier","Total","Date"]}/>
+    <tbody>{oil.map((r,i)=><TR key={i} cells={[r.week,r.oilType,`${r.litres}L`,GHC(r.costPerL),r.supplier||"—",<span style={{color:C.danger,fontWeight:600}}>{GHC(r.total)}</span>,r.submittedAt||"—"]}/>)}</tbody></table></div></Card>
   </div>;
 }
 
-/* ── ISSUE LOG ───────────────────────────────────────── */
-function IssueLog({logs,setLogs,carIDs}){
-  const blank={date:"",carID:carIDs[0]||"",driver:"",type:"Accident",severity:"Low",desc:"",status:"Open"};
-  const [M,setM]=useState(null),[del,setDel]=useState(null),[detail,setDetail]=useState(null);
-  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
-  const save=()=>{const d=M.data;if(!d.date||!d.desc)return alert("Fill required fields");const item={...d,id:M.mode==="add"?uid():d.id};const next=M.mode==="add"?[...logs,item]:logs.map(l=>l.id===item.id?item:l);setLogs(next);saveData("logs",next);setM(null);};
-  const remove=id=>{const next=logs.filter(l=>l.id!==id);setLogs(next);saveData("logs",next);setDel(null);if(detail?.id===id)setDetail(null);};
+function GMPayments({payments}){
+  const tot=payments.reduce((a,b)=>a+Number(b.amount||0),0);
+  return <div className="fade">
+    <PageTitle title="Payment Records" sub="All payments entered by Ops Manager"/>
+    <Metric label="Total Payments" value={GHC(tot)} sub="All time" color="#fceaea"/><div style={{marginBottom:18}}/>
+    <Card><div style={{overflowX:"auto"}}><table><TH cols={["Week","Payee","Purpose","Amount","Method","Status","Date"]}/>
+    <tbody>{payments.map((r,i)=><TR key={i} cells={[r.week,<b>{r.payee}</b>,r.purpose||"—",<span style={{color:C.danger,fontWeight:600}}>{GHC(r.amount)}</span>,r.method,<SBdg s={r.status}/>,r.submittedAt||"—"]}/>)}</tbody></table></div></Card>
+  </div>;
+}
+
+function GMLogs({logs}){
+  const [det,setDet]=useState(null);
   const sevC={Low:[C.success,"#e6f4ec"],Moderate:[C.accent,C.wBg],High:[C.danger,C.dBg]};
-  return <div style={{padding:24}}>
-    <Row title="Issue Log — Accidents, Claims & Incidents" action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Report Issue</Btn>}/>
-    {detail&&<Card style={{marginBottom:20,background:"#fdf9f3",border:`1.5px solid ${C.accent}`}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={{fontWeight:700,fontSize:15,color:C.primary}}>{detail.type} — {detail.carID}</span><Btn sm v="ghost" onClick={()=>setDetail(null)}>✕ Close</Btn></div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:12,fontSize:13}}><div><span style={{color:C.muted}}>Date: </span><b>{detail.date}</b></div><div><span style={{color:C.muted}}>Driver: </span><b>{detail.driver||"N/A"}</b></div><div><SBdg s={detail.status}/></div></div>
-      <div style={{fontSize:13,background:"#fff",padding:"10px 14px",borderRadius:8,border:`1px solid ${C.border}`}}>{detail.desc}</div>
+  return <div className="fade">
+    <PageTitle title="Issue Logs" sub="All incidents and reports (entered by Ops Manager)"/>
+    {det&&<Card style={{marginBottom:18,background:"#fdf9f3",border:`1.5px solid ${C.accent}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><b style={{color:C.primary,fontSize:15}}>{det.type} — {det.carNumber}</b><Btn sm v="ghost" onClick={()=>setDet(null)}>✕</Btn></div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:12,fontSize:13}}><div><span style={{color:C.muted}}>Date: </span><b>{det.date}</b></div><div><span style={{color:C.muted}}>Driver: </span><b>{det.driverName||"—"}</b></div><div><SBdg s={det.status}/></div></div>
+      <div style={{fontSize:13,background:"#fff",padding:"12px 14px",borderRadius:8,border:`1px solid ${C.border}`}}>{det.desc}</div>
     </Card>}
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
       {logs.map(l=>{const[sc,sbg]=sevC[l.severity]||[C.muted,"#f0f2f5"];return<Card key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16}}>
         <div style={{flex:1}}>
-          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6,flexWrap:"wrap"}}><span style={{fontWeight:700,color:C.primary,fontSize:14}}>{l.type}</span><Bdg label={l.severity} color={sc} bg={sbg} border={sc+"66"}/><SBdg s={l.status}/><span style={{fontSize:12,color:C.muted}}>• {l.date}</span></div>
-          <div style={{fontSize:13,color:C.muted,marginBottom:4}}><b style={{color:C.text}}>{l.carID}</b> — {l.driver||"N/A"}</div>
-          <div style={{fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:460}}>{l.desc}</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:6}}><b style={{color:C.primary}}>{l.type}</b><Bdg label={l.severity} color={sc} bg={sbg} border={sc+"66"}/><SBdg s={l.status}/><span style={{fontSize:12,color:C.muted}}>• {l.date}</span></div>
+          <div style={{fontSize:13,color:C.muted,marginBottom:3}}><b style={{color:C.text}}>{l.carNumber}</b> — {l.driverName||"N/A"}</div>
+          <div style={{fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:500}}>{l.desc}</div>
+        </div>
+        <Btn sm v="outline" onClick={()=>setDet(det?.id===l.id?null:l)}>View</Btn>
+      </Card>;})}
+      {logs.length===0&&<Card><p style={{color:C.muted,fontSize:13}}>No incidents logged yet.</p></Card>}
+    </div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════
+   OPERATIONAL MANAGER PORTAL
+═══════════════════════════════════════ */
+function OpsPortal({user,onLogout}){
+  const [page,setPage]=useState("dashboard");
+  const {data:opsSales,add:addOSale,update:updateOSale,remove:removeOSale}=useData("opsSales");
+  const {data:parts,add:addPart,update:updatePart,remove:removePart}=useData("parts");
+  const {data:oil,add:addOil,update:updateOil,remove:removeOil}=useData("oil");
+  const {data:insurance,add:addIns,update:updateIns,remove:removeIns}=useData("insurance");
+  const {data:logs,add:addLog,update:updateLog,remove:removeLog}=useData("logs");
+  const {data:payments,add:addPayment,update:updatePayment,remove:removePayment}=useData("payments");
+  const {data:driverSales}=useData("driverSales");
+  const {data:carInfo}=useData("carInfo");
+
+  const nav=[
+    {id:"dashboard",icon:"📊",label:"Dashboard"},
+    {section:true,label:"INPUT"},
+    {id:"sales",icon:"💰",label:"Total Sales"},
+    {id:"parts",icon:"🔧",label:"Car Parts & Maintenance"},
+    {id:"oil",icon:"🛢️",label:"Oil Changes"},
+    {id:"insurance",icon:"🛡️",label:"Insurance"},
+    {id:"payments",icon:"💳",label:"Payments to Others"},
+    {id:"logs",icon:"📝",label:"Report / Issue Log"},
+  ];
+
+  const pages={
+    dashboard:<OpsDashboard driverSales={driverSales} parts={parts} oil={oil} payments={payments} insurance={insurance} logs={logs} carInfo={carInfo}/>,
+    sales:<OpsSales opsSales={opsSales} addOSale={addOSale} updateOSale={updateOSale} removeOSale={removeOSale} user={user}/>,
+    parts:<OpsParts parts={parts} addPart={addPart} updatePart={updatePart} removePart={removePart} carInfo={carInfo} user={user}/>,
+    oil:<OpsOil oil={oil} addOil={addOil} updateOil={updateOil} removeOil={removeOil} user={user}/>,
+    insurance:<OpsInsurance insurance={insurance} addIns={addIns} updateIns={updateIns} removeIns={removeIns} carInfo={carInfo} user={user}/>,
+    payments:<OpsPayments payments={payments} addPayment={addPayment} updatePayment={updatePayment} removePayment={removePayment} user={user}/>,
+    logs:<OpsLogs logs={logs} addLog={addLog} updateLog={updateLog} removeLog={removeLog} carInfo={carInfo} user={user}/>,
+  };
+
+  return <Shell user={user} onLogout={onLogout} nav={nav} activePage={page} setPage={setPage}>
+    {pages[page]||pages.dashboard}
+  </Shell>;
+}
+
+function OpsDashboard({driverSales,parts,oil,payments,insurance,logs,carInfo}){
+  const wk=WEEKS[0];
+  const rev=driverSales.filter(s=>s.week===wk).reduce((a,b)=>a+Number(b.amount||0),0);
+  const tO=oil.filter(o=>o.week===wk).reduce((a,b)=>a+Number(b.total||0),0);
+  const tP=parts.filter(p=>p.week===wk).reduce((a,b)=>a+Number(b.total||0),0);
+  const tPy=payments.filter(p=>p.week===wk).reduce((a,b)=>a+Number(b.amount||0),0);
+  const openLogs=logs.filter(l=>l.status==="Open").length;
+  const expIns=insurance.filter(i=>expiryStatus(i.expiryDate)==="Expired").length;
+  return <div className="fade">
+    <PageTitle title="Operations Dashboard" sub={`${WEEKS[0]} — ${new Date().toDateString()}`}/>
+    {(expIns>0||openLogs>0)&&<Alert type="warn">{expIns>0&&<span><b>{expIns}</b> expired insurance policies. </span>}{openLogs>0&&<span><b>{openLogs}</b> open incidents awaiting resolution.</span>}</Alert>}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))",gap:14,marginBottom:22}}>
+      <Metric label="Driver Revenue (Week)" value={GHC(rev)} sub="From driver submissions" color="#e9f5ee"/>
+      <Metric label="Oil Cost (Week)" value={GHC(tO)} sub="Fleet oil purchase"/>
+      <Metric label="Parts Cost (Week)" value={GHC(tP)} sub="Maintenance & parts"/>
+      <Metric label="Payments (Week)" value={GHC(tPy)} sub="To external parties"/>
+      <Metric label="Open Issues" value={openLogs} color={openLogs>0?C.wBg:"#f4f6f9"} sub="Incidents/accidents"/>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18}}>
+      <Card>
+        <SectionTitle title="Insurance Alerts"/>
+        {insurance.map(ins=>{const st=expiryStatus(ins.expiryDate);return(st!=="Active"&&st!=="Unknown")&&<div key={ins.id} style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:13}}><span><b>{ins.carNumber}</b> — expires {ins.expiryDate}</span><SBdg s={st}/></div>;})}
+        {expIns===0&&insurance.filter(i=>expiryStatus(i.expiryDate)==="Expiring Soon").length===0&&<p style={{color:C.muted,fontSize:13,paddingTop:8}}>✓ All insurance policies active</p>}
+      </Card>
+      <Card>
+        <SectionTitle title="Roadworthy Alerts"/>
+        {carInfo.map(c=>{const st=expiryStatus(c.roadworthyExpiry);return(st!=="Active"&&st!=="Unknown")&&<div key={c.id} style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:13}}><span><b>{c.carNumber}</b> — expires {c.roadworthyExpiry}</span><SBdg s={st}/></div>;})}
+        {carInfo.filter(c=>expiryStatus(c.roadworthyExpiry)!=="Active"&&expiryStatus(c.roadworthyExpiry)!=="Unknown").length===0&&<p style={{color:C.muted,fontSize:13,paddingTop:8}}>✓ All roadworthy certificates active</p>}
+      </Card>
+    </div>
+  </div>;
+}
+
+function OpsSales({opsSales,addOSale,updateOSale,removeOSale,user}){
+  const blank={week:WEEKS[0],totalRevenue:"",fuelCost:"",notes:""};
+  const [M,setM]=useState(null),[del,setDel]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{const d=M.data;if(!d.week||!d.totalRevenue)return alert("Fill required fields");const item={...d,totalRevenue:Number(d.totalRevenue),fuelCost:Number(d.fuelCost||0),netRevenue:Number(d.totalRevenue)-Number(d.fuelCost||0),submittedBy:user.id,submittedAt:today()};M.mode==="add"?addOSale(item):updateOSale(M.data.id,item);setM(null);};
+  const weeks=[...new Set(opsSales.map(s=>s.week))];
+  return <div className="fade">
+    <PageTitle title="Total Sales Input" sub="Record total weekly revenue collected from all drivers"
+      action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Record</Btn>}/>
+    <Alert type="info">Driver-submitted individual sales are recorded separately by each driver. Use this section to input the overall weekly revenue total confirmed by the operations team.</Alert>
+    {weeks.map(wk=>{const rows=opsSales.filter(s=>s.week===wk);return<Card key={wk} style={{marginBottom:16}}>
+      <SectionTitle title={wk}/>
+      <table><TH cols={["Total Revenue","Fuel Cost","Net Revenue","Notes","Date",""]}/>
+      <tbody>{rows.map((r,i)=><TR key={i} cells={[<span style={{color:C.success,fontWeight:600}}>{GHC(r.totalRevenue)}</span>,GHC(r.fuelCost),<span style={{color:C.primary,fontWeight:600}}>{GHC(r.netRevenue)}</span>,r.notes||"—",r.submittedAt||"—",<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,totalRevenue:String(r.totalRevenue),fuelCost:String(r.fuelCost)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table>
+    </Card>;})}
+    {M&&<Modal title={M.mode==="add"?"Add Sales Record":"Edit Sales Record"} onClose={()=>setM(null)}>
+      <FormGrid>
+        <Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS} req/>
+        <Inp label="Total Revenue (GH₵)" value={M.data.totalRevenue} onChange={f("totalRevenue")} type="number" req/>
+        <Inp label="Fuel Cost (GH₵)" value={M.data.fuelCost} onChange={f("fuelCost")} type="number"/>
+        <FullCol><Inp label="Notes" value={M.data.notes} onChange={f("notes")}/></FullCol>
+      </FormGrid>
+      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
+    </Modal>}
+    {del&&<ConfirmDel msg="Delete this sales record?" onConfirm={()=>{removeOSale(del);setDel(null);}} onClose={()=>setDel(null)}/>}
+  </div>;
+}
+
+function OpsParts({parts,addPart,updatePart,removePart,carInfo,user}){
+  const carNums=[...new Set(carInfo.map(c=>c.carNumber))];
+  const blank={week:WEEKS[0],carNumber:carNums[0]||"",part:"",supplier:"",qty:"",unitCost:""};
+  const [M,setM]=useState(null),[del,setDel]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{const d=M.data;if(!d.part||!d.qty)return alert("Fill required fields");const total=Number(d.qty)*Number(d.unitCost||0);const item={...d,qty:Number(d.qty),unitCost:Number(d.unitCost||0),total,submittedBy:user.id,submittedAt:today()};M.mode==="add"?addPart(item):updatePart(M.data.id,item);setM(null);};
+  const tot=parts.reduce((a,b)=>a+Number(b.total||0),0);
+  return <div className="fade">
+    <PageTitle title="Car Parts & Maintenance" sub="Log all parts purchases and maintenance expenses"
+      action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Record</Btn>}/>
+    <Metric label="Total Parts Spend" value={GHC(tot)} sub="All time" color="#fceaea"/><div style={{marginBottom:18}}/>
+    <Card><div style={{overflowX:"auto"}}><table><TH cols={["Week","Car","Part","Supplier","Qty","Unit Cost","Total","Date",""]}/>
+    <tbody>{parts.map((r,i)=><TR key={i} cells={[r.week,<b style={{color:C.primary}}>{r.carNumber}</b>,r.part,r.supplier||"—",r.qty,GHC(r.unitCost),<span style={{color:C.danger,fontWeight:600}}>{GHC(r.total)}</span>,r.submittedAt||"—",<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,qty:String(r.qty),unitCost:String(r.unitCost)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table></div></Card>
+    {M&&<Modal title={M.mode==="add"?"Add Parts Record":"Edit Parts Record"} onClose={()=>setM(null)}>
+      <FormGrid>
+        <Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS} req/>
+        <Inp label="Car Number" value={M.data.carNumber} onChange={f("carNumber")} opts={carNums.length?carNums:["(add cars via drivers)"]}/>
+        <Inp label="Part Name" value={M.data.part} onChange={f("part")} req/>
+        <Inp label="Supplier" value={M.data.supplier} onChange={f("supplier")}/>
+        <Inp label="Quantity" value={M.data.qty} onChange={f("qty")} type="number" req/>
+        <Inp label="Unit Cost (GH₵)" value={M.data.unitCost} onChange={f("unitCost")} type="number"/>
+      </FormGrid>
+      {M.data.qty&&M.data.unitCost&&<div style={{marginBottom:14,padding:"10px 14px",background:"#eef2f8",borderRadius:8,fontSize:13}}>Total: <b style={{color:C.primary}}>{GHC(Number(M.data.qty)*Number(M.data.unitCost))}</b></div>}
+      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
+    </Modal>}
+    {del&&<ConfirmDel msg="Delete this parts record?" onConfirm={()=>{removePart(del);setDel(null);}} onClose={()=>setDel(null)}/>}
+  </div>;
+}
+
+function OpsOil({oil,addOil,updateOil,removeOil,user}){
+  const blank={week:WEEKS[0],oilType:"",litres:"",costPerL:"",supplier:"",notes:""};
+  const [M,setM]=useState(null),[del,setDel]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{const d=M.data;if(!d.oilType||!d.litres)return alert("Fill required fields");const total=Number(d.litres)*Number(d.costPerL||0);const item={...d,litres:Number(d.litres),costPerL:Number(d.costPerL||0),total,submittedBy:user.id,submittedAt:today()};M.mode==="add"?addOil(item):updateOil(M.data.id,item);setM(null);};
+  const grand=oil.reduce((a,b)=>a+Number(b.total||0),0);
+  return <div className="fade">
+    <PageTitle title="Oil Change Records" sub="Log weekly fleet oil purchases"
+      action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Purchase</Btn>}/>
+    <Metric label="Total Oil Spend" value={GHC(grand)} sub="All time" color="#fceaea"/><div style={{marginBottom:18}}/>
+    <Card><div style={{overflowX:"auto"}}><table><TH cols={["Week","Oil Type","Litres","Cost/L","Supplier","Notes","Total","Date",""]}/>
+    <tbody>{oil.map((r,i)=><TR key={i} cells={[r.week,r.oilType,`${r.litres}L`,GHC(r.costPerL),r.supplier||"—",r.notes||"—",<span style={{color:C.danger,fontWeight:600}}>{GHC(r.total)}</span>,r.submittedAt||"—",<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,litres:String(r.litres),costPerL:String(r.costPerL)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table>
+    <div style={{borderTop:`1px solid ${C.border}`,paddingTop:10,marginTop:6,display:"flex",justifyContent:"flex-end",gap:10,fontSize:13}}><span style={{color:C.muted}}>Grand Total:</span><b style={{color:C.danger}}>{GHC(grand)}</b></div></div></Card>
+    {M&&<Modal title={M.mode==="add"?"Add Oil Purchase":"Edit Oil Purchase"} onClose={()=>setM(null)}>
+      <FormGrid>
+        <Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS} req/>
+        <Inp label="Oil Type" value={M.data.oilType} onChange={f("oilType")} opts={["5W-30 Synthetic","10W-40 Semi","15W-40 Mineral","5W-40 Full Syn"]} req/>
+        <Inp label="Total Litres" value={M.data.litres} onChange={f("litres")} type="number" req/>
+        <Inp label="Cost per Litre (GH₵)" value={M.data.costPerL} onChange={f("costPerL")} type="number"/>
+        <Inp label="Supplier" value={M.data.supplier} onChange={f("supplier")}/>
+        <FullCol><Inp label="Notes" value={M.data.notes} onChange={f("notes")}/></FullCol>
+      </FormGrid>
+      {M.data.litres&&M.data.costPerL&&<div style={{marginBottom:14,padding:"10px 14px",background:"#eef2f8",borderRadius:8,fontSize:13}}>Total: <b style={{color:C.primary}}>{GHC(Number(M.data.litres)*Number(M.data.costPerL))}</b></div>}
+      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
+    </Modal>}
+    {del&&<ConfirmDel msg="Delete this oil record?" onConfirm={()=>{removeOil(del);setDel(null);}} onClose={()=>setDel(null)}/>}
+  </div>;
+}
+
+function OpsInsurance({insurance,addIns,updateIns,removeIns,carInfo,user}){
+  const carNums=[...new Set(carInfo.map(c=>c.carNumber))];
+  const blank={carNumber:carNums[0]||"",insurer:"",policyNo:"",issueDate:"",expiryDate:"",premium:"",type:"Comprehensive"};
+  const [M,setM]=useState(null),[del,setDel]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{const d=M.data;if(!d.insurer||!d.expiryDate)return alert("Fill required fields");const item={...d,premium:Number(d.premium||0),submittedBy:user.id,submittedAt:today()};M.mode==="add"?addIns(item):updateIns(M.data.id,item);setM(null);};
+  const recs=insurance.map(r=>({...r,status:expiryStatus(r.expiryDate)}));
+  const exp=recs.filter(r=>r.status==="Expired").length,soon=recs.filter(r=>r.status==="Expiring Soon").length;
+  return <div className="fade">
+    <PageTitle title="Insurance Records" sub="Vehicle insurance policies and renewal tracking"
+      action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Insurance</Btn>}/>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:20}}>
+      <Metric label="Total Policies" value={recs.length} sub="Registered"/>
+      <Metric label="Active" value={recs.filter(r=>r.status==="Active").length} color={C.sBg}/>
+      <Metric label="Expiring Soon" value={soon} color={soon>0?C.wBg:"#f4f6f9"}/>
+      <Metric label="Expired" value={exp} color={exp>0?C.dBg:"#f4f6f9"}/>
+    </div>
+    {(exp>0||soon>0)&&<Alert type="warn"><b>{exp}</b> expired, <b>{soon}</b> expiring within 30 days. Arrange renewal immediately.</Alert>}
+    <Card><div style={{overflowX:"auto"}}><table><TH cols={["Car No.","Insurer","Policy No.","Type","Issued","Expires","Premium","Status",""]}/>
+    <tbody>{recs.map((r,i)=><TR key={i} cells={[<b style={{color:C.primary}}>{r.carNumber}</b>,r.insurer,r.policyNo||"—",r.type,r.issueDate||"—",<b style={{color:r.status==="Expired"?C.danger:r.status==="Expiring Soon"?C.wTx:C.text}}>{r.expiryDate}</b>,<span style={{color:C.info,fontWeight:600}}>{GHC(r.premium)}</span>,<SBdg s={r.status}/>,<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,premium:String(r.premium)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table></div></Card>
+    {M&&<Modal title={M.mode==="add"?"Add Insurance":"Edit Insurance"} onClose={()=>setM(null)}>
+      <FormGrid>
+        <Inp label="Car Number" value={M.data.carNumber} onChange={f("carNumber")} opts={carNums.length?carNums:["(no cars yet)"]} req/>
+        <Inp label="Insurer" value={M.data.insurer} onChange={f("insurer")} req/>
+        <Inp label="Policy Number" value={M.data.policyNo} onChange={f("policyNo")}/>
+        <Inp label="Cover Type" value={M.data.type} onChange={f("type")} opts={["Comprehensive","Third Party","Third Party Fire & Theft"]}/>
+        <Inp label="Issue Date" value={M.data.issueDate} onChange={f("issueDate")} type="date"/>
+        <Inp label="Expiry Date" value={M.data.expiryDate} onChange={f("expiryDate")} type="date" req/>
+        <Inp label="Premium (GH₵)" value={M.data.premium} onChange={f("premium")} type="number"/>
+      </FormGrid>
+      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
+    </Modal>}
+    {del&&<ConfirmDel msg="Delete this insurance record?" onConfirm={()=>{removeIns(del);setDel(null);}} onClose={()=>setDel(null)}/>}
+  </div>;
+}
+
+function OpsPayments({payments,addPayment,updatePayment,removePayment,user}){
+  const blank={week:WEEKS[0],payee:"",purpose:"",amount:"",method:"Cash",status:"Pending"};
+  const [M,setM]=useState(null),[del,setDel]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{const d=M.data;if(!d.payee||!d.amount)return alert("Fill required fields");const item={...d,amount:Number(d.amount),submittedBy:user.id,submittedAt:today()};M.mode==="add"?addPayment(item):updatePayment(M.data.id,item);setM(null);};
+  const weeks=[...new Set(payments.map(p=>p.week))];
+  return <div className="fade">
+    <PageTitle title="Payments to Others" sub="Weekly payments to service providers, guards, contractors etc."
+      action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Payment</Btn>}/>
+    {weeks.map(wk=>{const rows=payments.filter(p=>p.week===wk);const tot=rows.reduce((a,b)=>a+Number(b.amount||0),0);return<Card key={wk} style={{marginBottom:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><b style={{color:C.primary}}>{wk}</b><span style={{color:C.danger,fontWeight:700}}>{GHC(tot)}</span></div>
+      <table><TH cols={["Payee","Purpose","Amount","Method","Status","Date",""]}/>
+      <tbody>{rows.map((r,i)=><TR key={i} cells={[<b>{r.payee}</b>,r.purpose||"—",<span style={{color:C.danger,fontWeight:600}}>{GHC(r.amount)}</span>,r.method,<SBdg s={r.status}/>,r.submittedAt||"—",<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,amount:String(r.amount)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table>
+    </Card>;})}
+    {M&&<Modal title={M.mode==="add"?"Add Payment":"Edit Payment"} onClose={()=>setM(null)}>
+      <FormGrid>
+        <Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS} req/>
+        <Inp label="Payee / Recipient" value={M.data.payee} onChange={f("payee")} req/>
+        <Inp label="Purpose" value={M.data.purpose} onChange={f("purpose")}/>
+        <Inp label="Amount (GH₵)" value={M.data.amount} onChange={f("amount")} type="number" req/>
+        <Inp label="Payment Method" value={M.data.method} onChange={f("method")} opts={["Cash","Mobile Money","Bank Transfer","Cheque"]}/>
+        <Inp label="Status" value={M.data.status} onChange={f("status")} opts={["Pending","Paid"]}/>
+      </FormGrid>
+      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
+    </Modal>}
+    {del&&<ConfirmDel msg="Delete this payment record?" onConfirm={()=>{removePayment(del);setDel(null);}} onClose={()=>setDel(null)}/>}
+  </div>;
+}
+
+function OpsLogs({logs,addLog,updateLog,removeLog,carInfo,user}){
+  const carNums=[...new Set(carInfo.map(c=>c.carNumber))];
+  const blank={date:today(),carNumber:carNums[0]||"",driverName:"",type:"Accident",severity:"Low",desc:"",status:"Open"};
+  const [M,setM]=useState(null),[del,setDel]=useState(null),[det,setDet]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{const d=M.data;if(!d.date||!d.desc)return alert("Fill required fields");const item={...d,submittedBy:user.id,submittedAt:today()};M.mode==="add"?addLog(item):updateLog(M.data.id,item);setM(null);};
+  const sevC={Low:[C.success,"#e6f4ec"],Moderate:[C.accent,C.wBg],High:[C.danger,C.dBg]};
+  return <div className="fade">
+    <PageTitle title="Report / Issue Log" sub="Record accidents, insurance claims, breakdowns and other incidents"
+      action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Report Issue</Btn>}/>
+    {det&&<Card style={{marginBottom:18,background:"#fdf9f3",border:`1.5px solid ${C.accent}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><b style={{color:C.primary,fontSize:15}}>{det.type} — {det.carNumber}</b><Btn sm v="ghost" onClick={()=>setDet(null)}>✕ Close</Btn></div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:12,fontSize:13}}><div><span style={{color:C.muted}}>Date: </span><b>{det.date}</b></div><div><span style={{color:C.muted}}>Driver: </span><b>{det.driverName||"—"}</b></div><div><SBdg s={det.status}/></div></div>
+      <div style={{fontSize:13,background:"#fff",padding:"12px 14px",borderRadius:8,border:`1px solid ${C.border}`}}>{det.desc}</div>
+    </Card>}
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {logs.map(l=>{const[sc,sbg]=sevC[l.severity]||[C.muted,"#f0f2f5"];return<Card key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16}}>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:6}}><b style={{color:C.primary}}>{l.type}</b><Bdg label={l.severity} color={sc} bg={sbg} border={sc+"66"}/><SBdg s={l.status}/><span style={{fontSize:12,color:C.muted}}>• {l.date}</span></div>
+          <div style={{fontSize:13,color:C.muted,marginBottom:3}}><b style={{color:C.text}}>{l.carNumber}</b>{l.driverName&&` — ${l.driverName}`}</div>
+          <div style={{fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:500}}>{l.desc}</div>
         </div>
         <div style={{display:"flex",gap:6,flexShrink:0}}>
-          <Btn sm v="outline" onClick={()=>setDetail(detail?.id===l.id?null:l)}>View</Btn>
+          <Btn sm v="outline" onClick={()=>setDet(det?.id===l.id?null:l)}>View</Btn>
           <Btn sm v="outline" onClick={()=>setM({mode:"edit",data:{...l}})}>✏️</Btn>
           <Btn sm v="ghost" danger onClick={()=>setDel(l.id)}>🗑️</Btn>
         </div>
       </Card>;})}
+      {logs.length===0&&<Card><p style={{color:C.muted,fontSize:13}}>No issues reported yet.</p></Card>}
     </div>
-    {M&&<Modal title={M.mode==="add"?"Report Issue":"Edit Issue"} onClose={()=>setM(null)}>
-      <Grid><Inp label="Date" value={M.data.date} onChange={f("date")} type="date" req/><Inp label="Car ID" value={M.data.carID} onChange={f("carID")} opts={carIDs}/><Inp label="Driver" value={M.data.driver} onChange={f("driver")}/><Inp label="Type" value={M.data.type} onChange={f("type")} opts={["Accident","Insurance Claim","Breakdown","Traffic Offence","Vehicle Theft","Other"]}/><Inp label="Severity" value={M.data.severity} onChange={f("severity")} opts={["Low","Moderate","High"]}/><Inp label="Status" value={M.data.status} onChange={f("status")} opts={["Open","In Review","Resolved"]}/></Grid>
-      <div style={{marginBottom:16}}>
-        <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Description <span style={{color:C.danger}}>*</span></label>
-        <textarea value={M.data.desc} onChange={e=>f("desc")(e.target.value)} rows={3} style={{display:"block",width:"100%",marginTop:4,padding:"7px 10px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:13,resize:"vertical",boxSizing:"border-box"}}/>
-      </div>
+    {M&&<Modal title={M.mode==="add"?"Report New Issue":"Edit Issue"} onClose={()=>setM(null)}>
+      <FormGrid>
+        <Inp label="Date" value={M.data.date} onChange={f("date")} type="date" req/>
+        <Inp label="Car Number" value={M.data.carNumber} onChange={f("carNumber")} opts={carNums.length?carNums:["(no cars)"]}/>
+        <Inp label="Driver Name" value={M.data.driverName} onChange={f("driverName")}/>
+        <Inp label="Incident Type" value={M.data.type} onChange={f("type")} opts={["Accident","Insurance Claim","Breakdown","Traffic Offence","Vehicle Theft","Other"]}/>
+        <Inp label="Severity" value={M.data.severity} onChange={f("severity")} opts={["Low","Moderate","High"]}/>
+        <Inp label="Status" value={M.data.status} onChange={f("status")} opts={["Open","In Review","Resolved"]}/>
+        <FullCol>
+          <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Description <span style={{color:C.danger}}>*</span></label>
+          <textarea value={M.data.desc} onChange={e=>f("desc")(e.target.value)} rows={3} style={{display:"block",width:"100%",marginTop:5,padding:"8px 10px",borderRadius:7,border:`1px solid ${C.border}`,fontSize:13,resize:"vertical",boxSizing:"border-box"}}/>
+        </FullCol>
+      </FormGrid>
       <FormFooter onCancel={()=>setM(null)} onSave={save}/>
     </Modal>}
-    {del&&<ConfirmModal msg="Delete this incident report?" onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
+    {del&&<ConfirmDel msg="Delete this incident report?" onConfirm={()=>{removeLog(del);setDel(null);}} onClose={()=>setDel(null)}/>}
   </div>;
 }
 
-/* ── MAIN APP ────────────────────────────────────────── */
-function App(){
-  const [S,setS]=useState(loadSettings);
-  const [authed,setAuthed]=useState(()=>LS.get("auth")===true);
+/* ═══════════════════════════════════════
+   DRIVER PORTAL
+═══════════════════════════════════════ */
+function DriverPortal({user,onLogout}){
   const [page,setPage]=useState("dashboard");
-  const [sideOpen,setSideOpen]=useState(true);
-  const [cars,setCars]=useState(()=>init("cars"));
-  const [sales,setSales]=useState(()=>init("sales"));
-  const [expenses,setExpenses]=useState(()=>init("expenses"));
-  const [payments,setPayments]=useState(()=>init("payments"));
-  const [oil,setOil]=useState(()=>init("oil"));
-  const [salaries,setSalaries]=useState(()=>init("salaries"));
-  const [parts,setParts]=useState(()=>init("parts"));
-  const [insurance,setInsurance]=useState(()=>init("insurance"));
-  const [logs,setLogs]=useState(()=>init("logs"));
-  const [installPrompt,setInstallPrompt]=useState(null);
-  const [installDismissed,setInstallDismissed]=useState(false);
+  const {data:carInfoAll,save:saveCarInfo}=useData("carInfo");
+  const {data:salesAll,save:saveSalesAll}=useData("driverSales");
 
-  useEffect(()=>{
-    const h=e=>{e.preventDefault();setInstallPrompt(e);};
-    window.addEventListener('beforeinstallprompt',h);
-    return()=>window.removeEventListener('beforeinstallprompt',h);
-  },[]);
+  // Filter to this driver only
+  const myCarInfo=carInfoAll.find(c=>c.driverID===user.id)||null;
+  const mySales=salesAll.filter(s=>s.driverID===user.id);
 
-  const login=()=>{LS.set("auth",true);setAuthed(true);};
-  const logout=()=>{LS.set("auth",false);setAuthed(false);};
-  const saveSettings=(newS,credChanged)=>{setS(newS);LS.set("cfg",newS);if(credChanged){LS.set("auth",false);setAuthed(false);alert("Credentials updated. Please sign in again.");};};
+  const saveCarInfoForMe=(newInfo)=>{
+    const rest=carInfoAll.filter(c=>c.driverID!==user.id);
+    saveCarInfo([...rest,{...newInfo,driverID:user.id,updatedAt:today()}]);
+  };
+  const addSale=item=>{saveSalesAll([...salesAll,{...item,id:uid(),driverID:user.id,submittedAt:today()}]);};
+  const updateSale=(id,item)=>{saveSalesAll(salesAll.map(s=>s.id===id?{...item,id,driverID:user.id}:s));};
+  const removeSale=id=>{saveSalesAll(salesAll.filter(s=>s.id!==id));};
 
-  if(!authed) return <Login onLogin={login} S={S}/>;
-
-  const carIDs=cars.map(c=>c.id);
-  const NAV=[
-    {id:"dashboard",icon:"📊",label:"Dashboard"},
-    {id:"finance",icon:"📈",label:"Financial Charts"},
-    {id:"cars",icon:"🚐",label:"Fleet & Drivers"},
-    {id:"sales",icon:"💰",label:"Weekly Sales"},
-    {id:"payments",icon:"👥",label:"Payments to Others"},
-    {id:"expenses",icon:"📋",label:"Other Expenses"},
-    {id:"oil",icon:"🛢️",label:"Oil Records"},
-    {id:"salaries",icon:"👷",label:"Driver Salaries"},
-    {id:"parts",icon:"🔧",label:"Car Parts"},
-    {id:"insurance",icon:"🛡️",label:"Insurance"},
-    {id:"log",icon:"📝",label:"Issue Log"},
-    {id:"settings",icon:"⚙️",label:"Settings"},
+  const nav=[
+    {id:"dashboard",icon:"📊",label:"My Dashboard"},
+    {id:"carinfo",icon:"🚐",label:"My Car & Documents"},
+    {id:"sales",icon:"💰",label:"My Weekly Sales"},
   ];
-  const PAGES={
-    dashboard:<Dashboard cars={cars} sales={sales} expenses={expenses} oil={oil} salaries={salaries} parts={parts} logs={logs} payments={payments}/>,
-    finance:<Finance sales={sales} expenses={expenses} oil={oil} salaries={salaries} parts={parts} payments={payments}/>,
-    cars:<Fleet cars={cars} setCars={setCars}/>,
-    sales:<Sales sales={sales} setSales={setSales} carIDs={carIDs}/>,
-    payments:<Payments payments={payments} setPayments={setPayments}/>,
-    expenses:<Expenses expenses={expenses} setExpenses={setExpenses}/>,
-    oil:<Oil oil={oil} setOil={setOil}/>,
-    salaries:<Salaries salaries={salaries} setSalaries={setSalaries}/>,
-    parts:<Parts parts={parts} setParts={setParts} carIDs={carIDs}/>,
-    insurance:<Insurance insurance={insurance} setInsurance={setInsurance} cars={cars}/>,
-    log:<IssueLog logs={logs} setLogs={setLogs} carIDs={carIDs}/>,
-    settings:<Settings S={S} onSave={saveSettings}/>,
+
+  const pages={
+    dashboard:<DriverDashboard user={user} myCarInfo={myCarInfo} mySales={mySales}/>,
+    carinfo:<DriverCarInfo user={user} myCarInfo={myCarInfo} onSave={saveCarInfoForMe}/>,
+    sales:<DriverSales user={user} mySales={mySales} addSale={addSale} updateSale={updateSale} removeSale={removeSale}/>,
   };
 
-  const appBgStyle=S.appBg?{backgroundImage:`url(${S.appBg})`,backgroundSize:"cover",backgroundPosition:"center",backgroundAttachment:"fixed"}:{background:C.bg};
+  return <Shell user={user} onLogout={onLogout} nav={nav} activePage={page} setPage={setPage}>
+    {pages[page]||pages.dashboard}
+  </Shell>;
+}
 
-  return <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",display:"flex",flexDirection:"column",...appBgStyle}}>
-    {/* Header */}
-    <div style={{background:S.primaryColor,color:"#fff",padding:"0 20px",display:"flex",alignItems:"center",justifyContent:"space-between",height:60,boxShadow:"0 2px 8px rgba(0,0,0,0.2)",position:"sticky",top:0,zIndex:100}}>
-      <div style={{display:"flex",alignItems:"center",gap:12}}>
-        <button onClick={()=>setSideOpen(o=>!o)} style={{background:"none",border:"none",color:"#fff",fontSize:22,cursor:"pointer",lineHeight:1,padding:4}}>☰</button>
-        <div style={{width:40,height:40,borderRadius:10,background:S.accentColor,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
-          {S.logoImage?<img src={S.logoImage} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontWeight:800,fontSize:13,color:"#fff"}}>{S.logoText||S.companyName.slice(0,3).toUpperCase()}</span>}
-        </div>
-        <div>
-          <div style={{fontWeight:700,fontSize:16}}>{S.companyName}</div>
-          <div style={{fontSize:10,color:"rgba(255,255,255,0.65)"}}>{S.tagline}</div>
-        </div>
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:16}}>
-        <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",textAlign:"right"}}>
-          {S.address&&<div>📍 {S.address}</div>}
-          {S.phone&&<div>📞 {S.phone}</div>}
-        </div>
-        <button onClick={logout} style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.25)",color:"#fff",borderRadius:7,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:600}}>🔒 Logout</button>
-      </div>
+function DriverDashboard({user,myCarInfo,mySales}){
+  const totalEarned=mySales.reduce((a,b)=>a+Number(b.amount||0),0);
+  const thisWeekSale=mySales.find(s=>s.week===WEEKS[0]);
+  const rwStatus=myCarInfo?expiryStatus(myCarInfo.roadworthyExpiry):"Unknown";
+  const licStatus=myCarInfo?expiryStatus(myCarInfo.licenseExpiry):"Unknown";
+  return <div className="fade">
+    <PageTitle title={`Welcome, ${user.name}`} sub={`Driver ID: ${user.driverID||"—"} — ${new Date().toDateString()}`}/>
+    {(rwStatus==="Expired"||rwStatus==="Expiring Soon")&&<Alert type="warn">Your roadworthy certificate is <b>{rwStatus.toLowerCase()}</b> (expires {myCarInfo?.roadworthyExpiry}). Please renew urgently.</Alert>}
+    {(licStatus==="Expired"||licStatus==="Expiring Soon")&&<Alert type="warn">Your driver's licence is <b>{licStatus.toLowerCase()}</b> (expires {myCarInfo?.licenseExpiry}). Please renew urgently.</Alert>}
+    {!myCarInfo&&<Alert type="info">You haven't submitted your car and document information yet. Please go to <b>My Car & Documents</b> to fill it in.</Alert>}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))",gap:14,marginBottom:22}}>
+      <Metric label="Total Earned" value={GHC(totalEarned)} sub="All time" color="#e9f5ee"/>
+      <Metric label="This Week" value={thisWeekSale?GHC(thisWeekSale.amount):"Not submitted"} sub={WEEKS[0]}/>
+      <Metric label="Sales Submitted" value={mySales.length} sub="Total weeks"/>
+      <Metric label="Roadworthy" value={rwStatus} sub={myCarInfo?.roadworthyExpiry||"Not set"} color={rwStatus==="Active"?C.sBg:rwStatus==="Unknown"?"#f4f6f9":C.dBg}/>
     </div>
-
-    {/* Install Banner */}
-    {installPrompt&&!installDismissed&&<div style={{background:"#1a4a2c",color:"#fff",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:13,gap:12}}>
-      <span>📲 <b>Install {S.companyName}</b> — Add to your desktop to use offline anywhere.</span>
-      <div style={{display:"flex",gap:8,flexShrink:0}}>
-        <button onClick={()=>{installPrompt.prompt();installPrompt.userChoice.then(()=>setInstallPrompt(null));}} style={{background:S.accentColor,color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",fontWeight:700,fontSize:12,cursor:"pointer"}}>Install</button>
-        <button onClick={()=>setInstallDismissed(true)} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"none",borderRadius:6,padding:"5px 10px",fontSize:12,cursor:"pointer"}}>✕</button>
-      </div>
-    </div>}
-
-    <div style={{display:"flex",flex:1,overflow:"hidden",height:`calc(100vh - ${installPrompt&&!installDismissed?104:60}px)`}}>
-      {/* Sidebar */}
-      {sideOpen&&<div style={{width:210,background:"rgba(255,255,255,0.97)",borderRight:`1px solid ${C.border}`,padding:"10px 0",display:"flex",flexDirection:"column",flexShrink:0,overflowY:"auto"}}>
-        {NAV.map((n,i)=><button key={n.id} onClick={()=>setPage(n.id)} style={{
-          display:"flex",alignItems:"center",gap:9,padding:"9px 18px",
-          background:page===n.id?"#eef2f8":"transparent",border:"none",cursor:"pointer",
-          textAlign:"left",color:page===n.id?S.primaryColor:C.text,
-          fontWeight:page===n.id?700:400,fontSize:13,
-          borderLeft:page===n.id?`3px solid ${S.primaryColor}`:"3px solid transparent",
-          marginTop:n.id==="settings"?10:0,
-          borderTop:n.id==="settings"?`1px solid ${C.border}`:"none"}}>
-          <span style={{fontSize:15}}>{n.icon}</span>{n.label}
-        </button>)}
-        <div style={{padding:"12px 18px",marginTop:"auto",borderTop:`1px solid ${C.border}`}}>
-          <div style={{fontSize:10,color:C.muted,fontWeight:600,marginBottom:4}}>SIGNED IN AS</div>
-          <div style={{fontSize:12,color:C.text,fontWeight:600}}>👤 {S.username}</div>
-        </div>
-      </div>}
-      {/* Content */}
-      <div style={{flex:1,overflowY:"auto"}}>{PAGES[page]||PAGES.dashboard}</div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18}}>
+      <Card>
+        <SectionTitle title="My Vehicle"/>
+        {myCarInfo?<div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {[["Car Number",myCarInfo.carNumber],["Plate",myCarInfo.plate],["Make",myCarInfo.make],["Licence No.",myCarInfo.licenseNo],["Licence Expiry",myCarInfo.licenseExpiry],["Roadworthy Expiry",myCarInfo.roadworthyExpiry]].map(([l,v],i)=><div key={i} style={{display:"flex",justifyContent:"space-between",borderBottom:`1px solid ${C.border}`,paddingBottom:8,fontSize:13}}><span style={{color:C.muted}}>{l}</span><b>{v||"—"}</b></div>)}
+        </div>:<p style={{color:C.muted,fontSize:13}}>No vehicle info submitted yet.</p>}
+      </Card>
+      <Card>
+        <SectionTitle title="Recent Sales"/>
+        {mySales.length>0?<table><TH cols={["Week","Trips","Amount"]}/>
+        <tbody>{[...mySales].reverse().slice(0,6).map((s,i)=><TR key={i} cells={[s.week,s.trips,<span style={{color:C.success,fontWeight:600}}>{GHC(s.amount)}</span>]}/>)}</tbody></table>
+        :<p style={{color:C.muted,fontSize:13}}>No sales submitted yet.</p>}
+      </Card>
     </div>
   </div>;
+}
+
+function DriverCarInfo({user,myCarInfo,onSave}){
+  const blank={carNumber:"",plate:"",make:"",color:"",licenseNo:"",licenseExpiry:"",roadworthyIssued:"",roadworthyExpiry:""};
+  const [form,setForm]=useState(myCarInfo?{...myCarInfo}:{...blank});
+  const [saved,setSaved]=useState(false);
+  const f=k=>v=>setForm(p=>({...p,[k]:v}));
+  const rwSt=expiryStatus(form.roadworthyExpiry);
+  const licSt=expiryStatus(form.licenseExpiry);
+  const save=()=>{
+    if(!form.carNumber||!form.plate)return alert("Car number and plate are required.");
+    onSave(form);setSaved(true);setTimeout(()=>setSaved(false),3000);
+  };
+  return <div className="fade">
+    <PageTitle title="My Car & Documents" sub="Keep your vehicle information and document dates up to date"/>
+    {(rwSt==="Expired"||rwSt==="Expiring Soon")&&<Alert type="warn">Roadworthy certificate is <b>{rwSt}</b>. Expires: {form.roadworthyExpiry}</Alert>}
+    {(licSt==="Expired"||licSt==="Expiring Soon")&&<Alert type="warn">Driver's licence is <b>{licSt}</b>. Expires: {form.licenseExpiry}</Alert>}
+    <Card>
+      <SectionTitle title="Vehicle Information"/>
+      <FormGrid>
+        <Inp label="Car Number (Fleet ID)" value={form.carNumber} onChange={f("carNumber")} req ph="e.g. BYT-006"/>
+        <Inp label="Plate Number" value={form.plate} onChange={f("plate")} req ph="e.g. GR-1234-24"/>
+        <Inp label="Make / Model" value={form.make} onChange={f("make")} ph="e.g. Toyota Sprinter"/>
+        <Inp label="Colour" value={form.color} onChange={f("color")} ph="e.g. White"/>
+      </FormGrid>
+      <SectionTitle title="Driver's Licence"/>
+      <FormGrid>
+        <Inp label="Licence Number" value={form.licenseNo} onChange={f("licenseNo")} ph="e.g. GH-1234567"/>
+        <Inp label="Licence Expiry Date" value={form.licenseExpiry} onChange={f("licenseExpiry")} type="date"/>
+      </FormGrid>
+      <SectionTitle title="Roadworthy Certificate"/>
+      <FormGrid>
+        <Inp label="Roadworthy Issue Date" value={form.roadworthyIssued} onChange={f("roadworthyIssued")} type="date"/>
+        <Inp label="Roadworthy Expiry Date" value={form.roadworthyExpiry} onChange={f("roadworthyExpiry")} type="date"/>
+        {form.roadworthyExpiry&&<div style={{display:"flex",flexDirection:"column",gap:5}}><label style={{fontSize:12,fontWeight:600,color:C.muted}}>Current Status</label><div style={{paddingTop:4}}><SBdg s={rwSt}/></div></div>}
+      </FormGrid>
+      <div style={{display:"flex",gap:12,alignItems:"center",paddingTop:4}}>
+        <Btn v="accent" onClick={save}>💾 Save Information</Btn>
+        {saved&&<span style={{fontSize:13,color:C.success,fontWeight:600}}>✓ Saved successfully!</span>}
+      </div>
+    </Card>
+  </div>;
+}
+
+function DriverSales({user,mySales,addSale,updateSale,removeSale}){
+  const blank={week:WEEKS[0],trips:"",amount:"",notes:""};
+  const [M,setM]=useState(null),[del,setDel]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{
+    const d=M.data;if(!d.week||!d.amount)return alert("Week and amount are required.");
+    const item={...d,trips:Number(d.trips||0),amount:Number(d.amount)};
+    M.mode==="add"?addSale(item):updateSale(M.data.id,{...item});setM(null);
+  };
+  const totalEarned=mySales.reduce((a,b)=>a+Number(b.amount||0),0);
+  const weeks=[...new Set(mySales.map(s=>s.week))];
+  return <div className="fade">
+    <PageTitle title="My Weekly Sales" sub="Submit your weekly earnings — one record per week"
+      action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Submit Sales</Btn>}/>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:22}}>
+      <Metric label="Total Earned" value={GHC(totalEarned)} sub="All time" color="#e9f5ee"/>
+      <Metric label="Weeks Submitted" value={mySales.length} sub="Records"/>
+      <Metric label="Latest Week" value={mySales[mySales.length-1]?GHC(mySales[mySales.length-1].amount):"—"} sub={mySales[mySales.length-1]?.week||""}/>
+    </div>
+    {weeks.map(wk=>{const rows=mySales.filter(s=>s.week===wk);return<Card key={wk} style={{marginBottom:16}}>
+      <SectionTitle title={wk}/>
+      <table><TH cols={["Trips","Amount","Notes","Submitted",""]}/>
+      <tbody>{rows.map((r,i)=><TR key={i} cells={[r.trips,<span style={{color:C.success,fontWeight:700,fontSize:15}}>{GHC(r.amount)}</span>,r.notes||"—",r.submittedAt||"—",<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,trips:String(r.trips),amount:String(r.amount)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table>
+    </Card>;})}
+    {weeks.length===0&&<Card><Alert type="info">You haven't submitted any sales yet. Click <b>+ Submit Sales</b> to add your first week.</Alert></Card>}
+    {M&&<Modal title={M.mode==="add"?"Submit Weekly Sales":"Edit Sales Record"} onClose={()=>setM(null)}>
+      <FormGrid>
+        <Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS} req/>
+        <Inp label="Number of Trips" value={M.data.trips} onChange={f("trips")} type="number"/>
+        <Inp label="Total Amount Collected (GH₵)" value={M.data.amount} onChange={f("amount")} type="number" req/>
+        <FullCol><Inp label="Notes (optional)" value={M.data.notes} onChange={f("notes")} ph="Any comments for this week"/></FullCol>
+      </FormGrid>
+      <FormFooter onCancel={()=>setM(null)} onSave={save} saveLabel="Submit"/>
+    </Modal>}
+    {del&&<ConfirmDel msg="Delete this sales record?" onConfirm={()=>{removeSale(del);setDel(null);}} onClose={()=>setDel(null)}/>}
+  </div>;
+}
+
+/* ═══════════════════════════════════════
+   ROOT APP
+═══════════════════════════════════════ */
+function App(){
+  const [user,setUser]=useState(()=>{
+    const saved=LS.get("session");
+    if(!saved)return null;
+    const users=LS.get("users")||[];
+    return users.find(u=>u.id===saved)||null;
+  });
+
+  const login=u=>{setUser(u);LS.set("session",u.id);};
+  const logout=()=>{setUser(null);LS.set("session",null);};
+
+  if(!user)return <Login onLogin={login}/>;
+  if(user.role===ROLES.GM)return <GMPortal user={user} onLogout={logout}/>;
+  if(user.role===ROLES.OPS)return <OpsPortal user={user} onLogout={logout}/>;
+  if(user.role===ROLES.DRIVER)return <DriverPortal user={user} onLogout={logout}/>;
+  return <Login onLogin={login}/>;
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
@@ -809,7 +1097,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
     navigator.serviceWorker.register('/byt-transport/sw.js')
-      .then(r=>console.log('SW:',r.scope)).catch(e=>console.log('SW fail:',e));
+      .then(r=>console.log('SW registered'))
+      .catch(e=>console.warn('SW failed',e));
   });
 }
 </script>
