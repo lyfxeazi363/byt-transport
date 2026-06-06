@@ -7,7 +7,6 @@
 <link rel="manifest" href="manifest.json"/>
 <meta name="theme-color" content="#1a3a5c"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="BYT Transport"/>
 <link rel="apple-touch-icon" href="icons/icon-192.png"/>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -20,35 +19,55 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6f9;color:#1a253
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:#f1f1f1}
 ::-webkit-scrollbar-thumb{background:#c5cdd8;border-radius:3px}
-input,select,textarea{font-family:inherit;outline:none}
-button{font-family:inherit;cursor:pointer}
+input,select,textarea,button{font-family:inherit}
 table{border-collapse:collapse;width:100%}
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:1000}
-.modal-box{background:#fff;border-radius:12px;padding:28px;width:90%;max-width:540px;box-shadow:0 8px 40px rgba(0,0,0,0.18);max-height:90vh;overflow-y:auto}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:999}
+.modal{background:#fff;border-radius:12px;padding:28px;width:90%;max-width:520px;box-shadow:0 8px 40px rgba(0,0,0,0.2);max-height:90vh;overflow-y:auto}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const {useState,useEffect,useRef,useCallback} = React;
+const {useState,useEffect,useRef} = React;
 
-// ─── THEME ────────────────────────────────────────────────────────────────
-const C = {
+/* ── COLOURS ─────────────────────────────────────────── */
+const C={
   primary:"#1a3a5c",accent:"#e8a020",bg:"#f4f6f9",
   border:"#dde3ec",text:"#1a2535",muted:"#6b7a8d",
   success:"#1a7a4a",danger:"#b93030",info:"#1a5cbf",
-  successBg:"#e6f4ec",dangerBg:"#fceaea",infoBg:"#e8eefb",
-  warnBg:"#fdf3e0",warnText:"#b96a10",warnBorder:"#f5d38a"
+  sBg:"#e6f4ec",dBg:"#fceaea",iBg:"#e8eefb",
+  wBg:"#fdf3e0",wTx:"#b96a10",wBd:"#f5d38a"
 };
 
-// ─── AUTH ─────────────────────────────────────────────────────────────────
-const ADMIN_USER = "admin";
-const ADMIN_PASS = "byt2024";
+/* ── DEFAULT SETTINGS ────────────────────────────────── */
+const DEF={
+  companyName:"BYT Transport",
+  logoText:"BYT",
+  tagline:"Admin Management System",
+  address:"Kasoa, Ghana",
+  phone:"0557086481",
+  email:"",
+  primaryColor:"#1a3a5c",
+  accentColor:"#e8a020",
+  logoImage:"",
+  loginBg:"",
+  appBg:"",
+  username:"admin",
+  password:"byt2024",
+};
 
-// ─── SEED DATA ────────────────────────────────────────────────────────────
-const WEEKS = ["Week 23 (Jun 2-8)","Week 22 (May 26-Jun 1)","Week 21 (May 19-25)","Week 20 (May 12-18)","Week 19 (May 5-11)"];
+/* ── LOCAL STORAGE ───────────────────────────────────── */
+const LS={
+  get:k=>{try{const v=localStorage.getItem("byt_"+k);return v?JSON.parse(v):null;}catch{return null;}},
+  set:(k,v)=>{try{localStorage.setItem("byt_"+k,JSON.stringify(v));}catch{}}
+};
+const loadData=k=>LS.get(k);
+const saveData=(k,v)=>LS.set(k,v);
+const loadSettings=()=>({...DEF,...(LS.get("cfg")||{})});
 
-const SEED = {
+/* ── SEED DATA ───────────────────────────────────────── */
+const WEEKS=["Week 23 (Jun 2-8)","Week 22 (May 26-Jun 1)","Week 21 (May 19-25)","Week 20 (May 12-18)","Week 19 (May 5-11)"];
+const SEED={
   cars:[
     {id:"BYT-001",plate:"GR-8821-23",make:"Toyota Sprinter",driver:"Kwame Asante",driverID:"DRV-101",status:"Active"},
     {id:"BYT-002",plate:"GR-4432-22",make:"Hyundai H100",driver:"Kofi Mensah",driverID:"DRV-102",status:"Active"},
@@ -69,18 +88,18 @@ const SEED = {
   ],
   expenses:[
     {id:1,week:"Week 23 (Jun 2-8)",category:"Road Tax",recipient:"DVLA Ghana",amount:500,note:"Annual renewal"},
-    {id:2,week:"Week 23 (Jun 2-8)",category:"Tolls",recipient:"Ghana Highways",amount:180,note:"Accra–Kasoa corridor"},
+    {id:2,week:"Week 23 (Jun 2-8)",category:"Tolls",recipient:"Ghana Highways",amount:180,note:"Accra–Kasoa"},
     {id:3,week:"Week 22 (May 26-Jun 1)",category:"Cleaning",recipient:"Bright Wash",amount:250,note:""},
   ],
   payments:[
-    {id:1,week:"Week 23 (Jun 2-8)",payee:"Kasoa Security Co.",purpose:"Night guard service",amount:400,method:"Mobile Money",status:"Paid"},
-    {id:2,week:"Week 23 (Jun 2-8)",payee:"Kofi Electricals",purpose:"Wiring repair — BYT-004",amount:350,method:"Cash",status:"Paid"},
-    {id:3,week:"Week 22 (May 26-Jun 1)",payee:"Ama Cleaning Services",purpose:"Office & yard cleaning",amount:250,method:"Cash",status:"Paid"},
+    {id:1,week:"Week 23 (Jun 2-8)",payee:"Kasoa Security Co.",purpose:"Night guard",amount:400,method:"Mobile Money",status:"Paid"},
+    {id:2,week:"Week 23 (Jun 2-8)",payee:"Kofi Electricals",purpose:"Wiring repair BYT-004",amount:350,method:"Cash",status:"Paid"},
+    {id:3,week:"Week 22 (May 26-Jun 1)",payee:"Ama Cleaning Services",purpose:"Office cleaning",amount:250,method:"Cash",status:"Paid"},
   ],
   oil:[
-    {id:1,week:"Week 23 (Jun 2-8)",oilType:"5W-30 Synthetic",litres:20,costPerL:45,total:900,supplier:"Kasoa Oil Depot",note:"Fleet bulk"},
+    {id:1,week:"Week 23 (Jun 2-8)",oilType:"5W-30 Synthetic",litres:20,costPerL:45,total:900,supplier:"Kasoa Oil Depot",note:""},
     {id:2,week:"Week 22 (May 26-Jun 1)",oilType:"10W-40 Semi",litres:18,costPerL:38,total:684,supplier:"Kasoa Oil Depot",note:""},
-    {id:3,week:"Week 21 (May 19-25)",oilType:"5W-30 Synthetic",litres:22,costPerL:45,total:990,supplier:"Total Energies GH",note:"Price increase"},
+    {id:3,week:"Week 21 (May 19-25)",oilType:"5W-30 Synthetic",litres:22,costPerL:45,total:990,supplier:"Total Energies GH",note:""},
   ],
   salaries:[
     {id:1,week:"Week 23 (Jun 2-8)",driver:"Kwame Asante",base:600,bonus:280,deductions:50,total:830,status:"Paid"},
@@ -90,10 +109,9 @@ const SEED = {
     {id:5,week:"Week 22 (May 26-Jun 1)",driver:"Kwame Asante",base:600,bonus:250,deductions:50,total:800,status:"Paid"},
   ],
   parts:[
-    {id:1,week:"Week 23 (Jun 2-8)",carID:"BYT-004",part:"Brake Pads (Front)",supplier:"Auto Parts GH",qty:2,unitCost:180,total:360},
+    {id:1,week:"Week 23 (Jun 2-8)",carID:"BYT-004",part:"Brake Pads",supplier:"Auto Parts GH",qty:2,unitCost:180,total:360},
     {id:2,week:"Week 23 (Jun 2-8)",carID:"BYT-001",part:"Air Filter",supplier:"Kasoa Motors",qty:1,unitCost:75,total:75},
     {id:3,week:"Week 22 (May 26-Jun 1)",carID:"BYT-003",part:"Wipers Set",supplier:"Auto Parts GH",qty:1,unitCost:60,total:60},
-    {id:4,week:"Week 21 (May 19-25)",carID:"BYT-002",part:"Tyre (rear)",supplier:"Kasoa Tyre Hub",qty:1,unitCost:520,total:520},
   ],
   insurance:[
     {id:1,carID:"BYT-001",plate:"GR-8821-23",insurer:"Star Assurance",policyNo:"SA-2024-00183",issueDate:"2025-06-01",expiryDate:"2026-05-31",premium:1800,type:"Comprehensive"},
@@ -103,1135 +121,603 @@ const SEED = {
     {id:5,carID:"BYT-005",plate:"GR-5561-23",insurer:"Vanguard Assurance",policyNo:"VA-2026-00089",issueDate:"2026-03-01",expiryDate:"2027-02-28",premium:1950,type:"Comprehensive"},
   ],
   logs:[
-    {id:1,date:"2026-06-03",carID:"BYT-004",driver:"Ama Darko",type:"Accident",severity:"Moderate",desc:"Minor collision at Kasoa roundabout. Front bumper damaged. No injuries.",status:"Open"},
+    {id:1,date:"2026-06-03",carID:"BYT-004",driver:"Ama Darko",type:"Accident",severity:"Moderate",desc:"Minor collision at Kasoa roundabout. Front bumper damaged.",status:"Open"},
     {id:2,date:"2026-05-28",carID:"BYT-002",driver:"Kofi Mensah",type:"Insurance Claim",severity:"Low",desc:"Windshield crack claim submitted to Star Assurance.",status:"In Review"},
-    {id:3,date:"2026-05-20",carID:"BYT-001",driver:"Kwame Asante",type:"Breakdown",severity:"Low",desc:"Engine overheating on Accra–Kasoa highway. Towed to garage.",status:"Resolved"},
+    {id:3,date:"2026-05-20",carID:"BYT-001",driver:"Kwame Asante",type:"Breakdown",severity:"Low",desc:"Engine overheating on Accra–Kasoa highway.",status:"Resolved"},
   ],
 };
+const init=k=>loadData(k)??SEED[k];
+const uid=()=>Date.now()+Math.random();
+const GHC=n=>`GH₵ ${Number(n).toLocaleString("en-GH",{minimumFractionDigits:2})}`;
+const getInsStatus=exp=>{if(!exp)return"Unknown";const d=Math.ceil((new Date(exp)-new Date())/(864e5));return d<0?"Expired":d<=30?"Expiring Soon":"Active";};
 
-// ─── STORAGE ──────────────────────────────────────────────────────────────
-const LS = {
-  get:(k)=>{try{const v=localStorage.getItem("byt_"+k);return v?JSON.parse(v):null;}catch{return null;}},
-  set:(k,v)=>{try{localStorage.setItem("byt_"+k,JSON.stringify(v));}catch{}},
-};
-const load = (key) => LS.get(key) ?? SEED[key];
-const save = (key,val) => LS.set(key,val);
+/* ── SHARED UI ───────────────────────────────────────── */
+const SM={Active:[C.success,C.sBg,"#aedcc2"],Maintenance:[C.accent,C.wBg,C.wBd],Paid:[C.success,C.sBg,"#aedcc2"],Pending:[C.wTx,C.wBg,C.wBd],Open:[C.danger,C.dBg,"#f5b0b0"],"In Review":[C.info,C.iBg,"#a5c2f2"],Resolved:[C.success,C.sBg,"#aedcc2"],Expired:[C.danger,C.dBg,"#f5b0b0"],"Expiring Soon":[C.wTx,C.wBg,C.wBd],Unknown:[C.muted,"#f0f2f5","#c8cdd4"]};
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────
-const GHC = n=>`GH₵ ${Number(n).toLocaleString("en-GH",{minimumFractionDigits:2})}`;
-const uid = () => Date.now() + Math.random();
-
-function Badge({label,color,bg,border}){
+function Bdg({label,color,bg,border}){
   return <span style={{fontSize:11,fontWeight:600,padding:"2px 10px",borderRadius:20,background:bg,color,border:`1px solid ${border}`,whiteSpace:"nowrap"}}>{label}</span>;
 }
-const SM={Active:[C.success,C.successBg,"#aedcc2"],Maintenance:[C.accent,C.warnBg,C.warnBorder],Paid:[C.success,C.successBg,"#aedcc2"],Pending:[C.warnText,C.warnBg,C.warnBorder],Open:[C.danger,C.dangerBg,"#f5b0b0"],"In Review":[C.info,C.infoBg,"#a5c2f2"],Resolved:[C.success,C.successBg,"#aedcc2"],Expired:[C.danger,C.dangerBg,"#f5b0b0"],"Expiring Soon":[C.warnText,C.warnBg,C.warnBorder],Unknown:[C.muted,"#f0f2f5","#c8cdd4"]};
-function SBadge({s}){const[c,bg,b]=SM[s]||SM.Unknown;return <Badge label={s} color={c} bg={bg} border={b}/>;}
+function SBdg({s}){const[c,bg,b]=SM[s]||SM.Unknown;return <Bdg label={s} color={c} bg={bg} border={b}/>;}
 function Card({children,style}){return <div style={{background:"#fff",borderRadius:10,border:`1px solid ${C.border}`,padding:"20px 22px",...style}}>{children}</div>;}
-function ST({title,action}){return <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}><h2 style={{fontSize:17,fontWeight:700,color:C.primary,margin:0}}>{title}</h2>{action}</div>;}
-function MC({label,value,sub,color}){return <div style={{background:color||"#f4f6f9",borderRadius:10,padding:"16px 20px",border:`1px solid ${C.border}`}}><div style={{fontSize:12,color:C.muted,fontWeight:600,marginBottom:6}}>{label}</div><div style={{fontSize:22,fontWeight:700,color:C.primary}}>{value}</div>{sub&&<div style={{fontSize:11,color:C.muted,marginTop:3}}>{sub}</div>}</div>;}
-function Btn({children,onClick,variant="primary",small,danger}){
-  const s={primary:{background:C.primary,color:"#fff",border:"none"},accent:{background:C.accent,color:"#fff",border:"none"},outline:{background:"#fff",color:C.primary,border:`1px solid ${C.primary}`},ghost:{background:"transparent",color:C.muted,border:`1px solid ${C.border}`}};
-  const base=s[variant]||s.primary;
-  const ds=danger?{background:"#fff",color:C.danger,border:`1px solid ${C.danger}`}:{};
-  return <button onClick={onClick} style={{...base,...ds,cursor:"pointer",borderRadius:7,padding:small?"4px 10px":"8px 16px",fontSize:small?11:13,fontWeight:600,whiteSpace:"nowrap"}}>{children}</button>;
+function Row({title,action}){return <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}><h2 style={{fontSize:17,fontWeight:700,color:C.primary,margin:0}}>{title}</h2>{action}</div>;}
+function Metric({label,value,sub,color}){return <div style={{background:color||"#f4f6f9",borderRadius:10,padding:"16px 20px",border:`1px solid ${C.border}`}}><div style={{fontSize:12,color:C.muted,fontWeight:600,marginBottom:6}}>{label}</div><div style={{fontSize:22,fontWeight:700,color:C.primary}}>{value}</div>{sub&&<div style={{fontSize:11,color:C.muted,marginTop:3}}>{sub}</div>}</div>;}
+function Btn({children,onClick,v="primary",sm,danger}){
+  const base={primary:{background:C.primary,color:"#fff",border:"none"},accent:{background:C.accent,color:"#fff",border:"none"},outline:{background:"#fff",color:C.primary,border:`1px solid ${C.primary}`},ghost:{background:"transparent",color:C.muted,border:`1px solid ${C.border}`}};
+  const s=base[v]||base.primary;
+  return <button onClick={onClick} style={{...s,...(danger?{background:"#fff",color:C.danger,border:`1px solid ${C.danger}`}:{}),cursor:"pointer",borderRadius:7,padding:sm?"4px 10px":"8px 16px",fontSize:sm?11:13,fontWeight:600,whiteSpace:"nowrap"}}>{children}</button>;
 }
-function Inp({label,value,onChange,type="text",options,required,placeholder}){
+function Inp({label,value,onChange,type="text",opts,req,ph}){
   return <div style={{display:"flex",flexDirection:"column",gap:4}}>
-    <label style={{fontSize:12,fontWeight:600,color:C.muted}}>{label}{required&&<span style={{color:C.danger}}> *</span>}</label>
-    {options
+    <label style={{fontSize:12,fontWeight:600,color:C.muted}}>{label}{req&&<span style={{color:C.danger}}> *</span>}</label>
+    {opts
       ?<select value={value} onChange={e=>onChange(e.target.value)} style={{padding:"7px 10px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:13,color:C.text,background:"#fff"}}>
         <option value="">Select…</option>
-        {options.map(o=><option key={o} value={o}>{o}</option>)}
+        {opts.map(o=><option key={o} value={o}>{o}</option>)}
       </select>
-      :<input type={type} value={value} placeholder={placeholder||""} onChange={e=>onChange(e.target.value)} style={{padding:"7px 10px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:13,color:C.text}}/>}
+      :<input type={type} value={value} placeholder={ph||""} onChange={e=>onChange(e.target.value)} style={{padding:"7px 10px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:13,color:C.text}}/>}
   </div>;
 }
-
-// ─── MODAL ────────────────────────────────────────────────────────────────
+function THead({cols}){return <thead><tr>{cols.map((h,i)=><th key={i} style={{padding:"8px 12px",background:"#f4f6f9",color:C.muted,fontWeight:600,textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>;}
+function TRow({cells}){return <tr style={{borderBottom:`1px solid ${C.border}`}}>{cells.map((c,i)=><td key={i} style={{padding:"9px 12px",verticalAlign:"middle"}}>{c}</td>)}</tr>;}
 function Modal({title,onClose,children}){
-  return <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-    <div className="modal-box">
+  return <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+    <div className="modal">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
         <h3 style={{fontSize:16,fontWeight:700,color:C.primary}}>{title}</h3>
-        <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,color:C.muted,lineHeight:1,cursor:"pointer"}}>×</button>
+        <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,color:C.muted,lineHeight:1,cursor:"pointer"}}>×</button>
       </div>
       {children}
     </div>
   </div>;
 }
-
-// ─── GENERIC CRUD TABLE ───────────────────────────────────────────────────
-// Each page uses useEditDelete hook + renders ✏️ 🗑️ per row
-
-function getInsStatus(expiry){
-  if(!expiry)return"Unknown";
-  const d=Math.ceil((new Date(expiry)-new Date())/(86400000));
-  return d<0?"Expired":d<=30?"Expiring Soon":"Active";
+function ConfirmModal({msg,onConfirm,onClose}){
+  return <Modal title="Confirm Delete" onClose={onClose}>
+    <p style={{fontSize:13,color:C.muted,marginBottom:20}}>{msg}</p>
+    <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+      <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+      <Btn v="primary" danger onClick={onConfirm}>Delete</Btn>
+    </div>
+  </Modal>;
 }
+function ActBtns({onEdit,onDel}){
+  return <div style={{display:"flex",gap:6}}>
+    <Btn sm v="outline" onClick={onEdit}>✏️ Edit</Btn>
+    <Btn sm v="ghost" danger onClick={onDel}>🗑️</Btn>
+  </div>;
+}
+function FormFooter({onCancel,onSave}){
+  return <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:4}}>
+    <Btn v="ghost" onClick={onCancel}>Cancel</Btn>
+    <Btn v="accent" onClick={onSave}>Save</Btn>
+  </div>;
+}
+function Grid({children}){return <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>{children}</div>;}
+function Full({children}){return <div style={{gridColumn:"1/-1"}}>{children}</div>;}
 
-// ─── LOGIN PAGE ───────────────────────────────────────────────────────────
-function LoginPage({onLogin,settings}){
-  const S=settings||DEFAULT_SETTINGS;
-  const [u,setU]=useState("");
-  const [p,setP]=useState("");
-  const [err,setErr]=useState("");
-  const [show,setShow]=useState(false);
-  const submit=()=>{
-    if(u===S.adminUsername&&p===S.adminPassword){onLogin();}
-    else{setErr("Invalid username or password.");setP("");}
-  };
-  return <div style={{minHeight:"100vh",background:S.loginBgImage?`url(${S.loginBgImage}) center/cover fixed`:`linear-gradient(135deg,${S.primaryColor} 0%,#2a5a8c 100%)`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-    <div style={{background:"#fff",borderRadius:16,padding:"40px 36px",width:360,boxShadow:"0 20px 60px rgba(0,0,0,0.25)"}}>
+/* ── LOGIN ───────────────────────────────────────────── */
+function Login({onLogin,S}){
+  const [u,setU]=useState(""),[p,setP]=useState(""),[err,setErr]=useState(""),[show,setShow]=useState(false);
+  const go=()=>{if(u===S.username&&p===S.password)onLogin();else{setErr("Invalid username or password.");setP("");}};
+  const bgStyle=S.loginBg?{backgroundImage:`url(${S.loginBg})`,backgroundSize:"cover",backgroundPosition:"center"}:{background:`linear-gradient(135deg,${S.primaryColor} 0%,#2a5a8c 100%)`};
+  return <div style={{minHeight:"100vh",...bgStyle,display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{background:"#fff",borderRadius:16,padding:"40px 36px",width:360,boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
       <div style={{textAlign:"center",marginBottom:28}}>
-        <div style={{width:56,height:56,borderRadius:14,background:S.accentColor,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:20,color:"#fff",marginBottom:14,overflow:"hidden"}}>
-          {S.logoImage?<img src={S.logoImage} alt="logo" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span>{S.logoText||S.companyName.slice(0,3).toUpperCase()}</span>}
+        <div style={{width:60,height:60,borderRadius:14,background:S.accentColor,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:20,color:"#fff",marginBottom:14,overflow:"hidden"}}>
+          {S.logoImage?<img src={S.logoImage} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span>{S.logoText||S.companyName.slice(0,3).toUpperCase()}</span>}
         </div>
-        <div style={{fontSize:20,fontWeight:700,color:S.primaryColor}}>{S.companyName}</div>
+        <div style={{fontSize:22,fontWeight:700,color:S.primaryColor}}>{S.companyName}</div>
         <div style={{fontSize:13,color:C.muted,marginTop:4}}>{S.tagline}</div>
-        <div style={{fontSize:11,color:C.muted,marginTop:2}}>{S.address&&`📍 ${S.address}`}{S.address&&S.phone&&" • "}{S.phone&&`📞 ${S.phone}`}</div>
+        {(S.address||S.phone)&&<div style={{fontSize:11,color:C.muted,marginTop:3}}>{S.address&&`📍 ${S.address}`}{S.address&&S.phone&&" • "}{S.phone&&`📞 ${S.phone}`}</div>}
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        <Inp label="Username" value={u} onChange={setU} placeholder="admin" required/>
+        <Inp label="Username" value={u} onChange={setU} ph="Enter username" req/>
         <div style={{display:"flex",flexDirection:"column",gap:4}}>
           <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Password <span style={{color:C.danger}}>*</span></label>
           <div style={{position:"relative"}}>
-            <input type={show?"text":"password"} value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="••••••••" style={{width:"100%",padding:"7px 36px 7px 10px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:13,color:C.text}}/>
+            <input type={show?"text":"password"} value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder="••••••••" style={{width:"100%",padding:"7px 36px 7px 10px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:13}}/>
             <button onClick={()=>setShow(s=>!s)} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,fontSize:14,cursor:"pointer"}}>{show?"🙈":"👁"}</button>
           </div>
         </div>
-        {err&&<div style={{fontSize:12,color:C.danger,background:C.dangerBg,padding:"8px 12px",borderRadius:6}}>{err}</div>}
-        <button onClick={submit} style={{background:C.primary,color:"#fff",border:"none",borderRadius:8,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",marginTop:4}}>Sign In</button>
+        {err&&<div style={{fontSize:12,color:C.danger,background:C.dBg,padding:"8px 12px",borderRadius:6}}>{err}</div>}
+        <button onClick={go} style={{background:S.primaryColor,color:"#fff",border:"none",borderRadius:8,padding:11,fontSize:14,fontWeight:700,cursor:"pointer",marginTop:4}}>Sign In</button>
       </div>
-      <div style={{marginTop:18,textAlign:"center",fontSize:11,color:C.muted}}>🔒 Restricted to authorised administrators only</div>
+      <div style={{marginTop:16,textAlign:"center",fontSize:11,color:C.muted}}>🔒 Authorised administrators only</div>
     </div>
   </div>;
 }
 
-// ─── DASHBOARD ────────────────────────────────────────────────────────────
+/* ── SETTINGS ────────────────────────────────────────── */
+function Settings({S,onSave}){
+  const [f,setF]=useState({...S});
+  const [tab,setTab]=useState("branding");
+  const [ok,setOk]=useState(false);
+  const set=k=>v=>setF(p=>({...p,[k]:v}));
+
+  const upload=(key,maxKB)=>e=>{
+    const file=e.target.files[0];if(!file)return;
+    if(file.size>maxKB*1024){alert(`Please use an image under ${maxKB}KB.`);return;}
+    const r=new FileReader();r.onload=ev=>setF(p=>({...p,[key]:ev.target.result}));r.readAsDataURL(file);
+    e.target.value="";
+  };
+
+  const save=()=>{
+    if(!f.companyName||!f.username||!f.password){alert("Company name, username and password are required.");return;}
+    const credChanged=f.username!==S.username||f.password!==S.password;
+    onSave(f,credChanged);
+    setOk(true);setTimeout(()=>setOk(false),3000);
+  };
+
+  const TABS=[{id:"branding",label:"🎨 Branding"},{id:"backgrounds",label:"🖼️ Backgrounds"},{id:"contact",label:"📍 Contact"},{id:"security",label:"🔐 Security"}];
+
+  const UploadBox=({field,label,maxKB,hint,previewStyle})=>(
+    <div style={{border:`2px dashed ${C.border}`,borderRadius:10,padding:16,display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap"}}>
+      <div style={{width:160,height:100,borderRadius:8,overflow:"hidden",flexShrink:0,border:`1px solid ${C.border}`,...previewStyle}}>
+        {f[field]&&<img src={f[field]} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>}
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:8,flex:1}}>
+        <label style={{background:S.primaryColor,color:"#fff",borderRadius:7,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",display:"inline-block",width:"fit-content"}}>
+          📁 {label}
+          <input type="file" accept="image/*" onChange={upload(field,maxKB)} style={{display:"none"}}/>
+        </label>
+        {f[field]
+          ?<><div style={{fontSize:12,color:C.success,fontWeight:600}}>✓ Image loaded</div>
+            <button onClick={()=>setF(p=>({...p,[field]:""}))} style={{background:"none",border:`1px solid ${C.danger}`,color:C.danger,borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer",fontWeight:600,width:"fit-content"}}>✕ Remove</button></>
+          :<div style={{fontSize:12,color:C.muted}}>No image set</div>}
+        <div style={{fontSize:11,color:C.muted}}>{hint}</div>
+      </div>
+    </div>
+  );
+
+  return <div style={{padding:24,maxWidth:680}}>
+    <div style={{marginBottom:20}}>
+      <h1 style={{fontSize:20,fontWeight:700,color:C.primary,margin:0}}>⚙️ Settings</h1>
+      <p style={{margin:"6px 0 0",fontSize:13,color:C.muted}}>Customise branding, backgrounds, contact details and login credentials. All changes save to this device.</p>
+    </div>
+
+    {/* Tabs */}
+    <div style={{display:"flex",gap:2,marginBottom:20,borderBottom:`2px solid ${C.border}`}}>
+      {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"9px 16px",fontSize:13,fontWeight:tab===t.id?700:400,background:"none",border:"none",cursor:"pointer",color:tab===t.id?C.primary:C.muted,borderBottom:tab===t.id?`2px solid ${C.primary}`:"2px solid transparent",marginBottom:-2}}>{t.label}</button>)}
+    </div>
+
+    {/* BRANDING */}
+    {tab==="branding"&&<Card>
+      <h3 style={{fontSize:14,fontWeight:700,color:C.primary,marginBottom:16}}>Company Branding</h3>
+      {/* Live preview */}
+      <div style={{marginBottom:20,padding:14,background:"#f4f6f9",borderRadius:10,display:"flex",alignItems:"center",gap:14}}>
+        <div style={{width:48,height:48,borderRadius:10,background:f.accentColor,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
+          {f.logoImage?<img src={f.logoImage} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontWeight:800,fontSize:13,color:"#fff"}}>{f.logoText||f.companyName.slice(0,3).toUpperCase()}</span>}
+        </div>
+        <div>
+          <div style={{fontWeight:700,fontSize:16,color:f.primaryColor}}>{f.companyName||"Company Name"}</div>
+          <div style={{fontSize:11,color:C.muted}}>{f.tagline||"Tagline"}</div>
+          <div style={{fontSize:11,color:C.muted,marginTop:1}}>{f.address&&`📍 ${f.address}`}{f.address&&f.phone&&" • "}{f.phone&&`📞 ${f.phone}`}</div>
+        </div>
+      </div>
+      <Grid>
+        <Inp label="Company Name" value={f.companyName} onChange={set("companyName")} req/>
+        <Inp label="Logo Letters (if no image)" value={f.logoText} onChange={set("logoText")}/>
+        <Full><Inp label="Tagline / Subtitle" value={f.tagline} onChange={set("tagline")}/></Full>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Primary Colour</label>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <input type="color" value={f.primaryColor} onChange={e=>set("primaryColor")(e.target.value)} style={{width:40,height:34,borderRadius:6,border:`1px solid ${C.border}`,cursor:"pointer",padding:2}}/>
+            <span style={{fontSize:12,color:C.muted,fontFamily:"monospace"}}>{f.primaryColor}</span>
+          </div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Accent Colour</label>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <input type="color" value={f.accentColor} onChange={e=>set("accentColor")(e.target.value)} style={{width:40,height:34,borderRadius:6,border:`1px solid ${C.border}`,cursor:"pointer",padding:2}}/>
+            <span style={{fontSize:12,color:C.muted,fontFamily:"monospace"}}>{f.accentColor}</span>
+          </div>
+        </div>
+      </Grid>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Logo Image (PNG/JPG, max 200KB)</label>
+        <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+          {f.logoImage&&<div style={{width:48,height:48,borderRadius:10,overflow:"hidden",border:`1px solid ${C.border}`}}><img src={f.logoImage} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/></div>}
+          <label style={{background:C.primary,color:"#fff",borderRadius:7,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+            📁 Upload Logo
+            <input type="file" accept="image/*" onChange={upload("logoImage",200)} style={{display:"none"}}/>
+          </label>
+          {f.logoImage&&<button onClick={()=>setF(p=>({...p,logoImage:""}))} style={{background:"none",border:`1px solid ${C.danger}`,color:C.danger,borderRadius:7,padding:"6px 12px",fontSize:12,cursor:"pointer",fontWeight:600}}>✕ Remove</button>}
+          {f.logoImage&&<span style={{fontSize:12,color:C.success}}>✓ Loaded</span>}
+        </div>
+        <span style={{fontSize:11,color:C.muted}}>If no image is uploaded, the Logo Letters text will be shown instead.</span>
+      </div>
+    </Card>}
+
+    {/* BACKGROUNDS */}
+    {tab==="backgrounds"&&<div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <Card>
+        <h3 style={{fontSize:14,fontWeight:700,color:C.primary,marginBottom:6}}>Login Screen Background</h3>
+        <p style={{fontSize:12,color:C.muted,marginBottom:14}}>Appears behind the login card. Best size: 1920×1080px. Max 1.5MB.</p>
+        <UploadBox field="loginBg" label="Upload Login Background" maxKB={1500}
+          hint="PNG, JPG or WEBP. The gradient is used if no image is set."
+          previewStyle={f.loginBg?{backgroundImage:`url(${f.loginBg})`,backgroundSize:"cover",backgroundPosition:"center"}:{background:`linear-gradient(135deg,${f.primaryColor},#2a5a8c)`}}/>
+      </Card>
+      <Card>
+        <h3 style={{fontSize:14,fontWeight:700,color:C.primary,marginBottom:6}}>App Background</h3>
+        <p style={{fontSize:12,color:C.muted,marginBottom:14}}>Appears behind the main dashboard and all pages. Max 1.5MB.</p>
+        <UploadBox field="appBg" label="Upload App Background" maxKB={1500}
+          hint="Tip: use a subtle texture or faint image so text stays readable."
+          previewStyle={f.appBg?{backgroundImage:`url(${f.appBg})`,backgroundSize:"cover",backgroundPosition:"center"}:{background:"#f4f6f9"}}/>
+      </Card>
+    </div>}
+
+    {/* CONTACT */}
+    {tab==="contact"&&<Card>
+      <h3 style={{fontSize:14,fontWeight:700,color:C.primary,marginBottom:16}}>Contact Information</h3>
+      <Grid>
+        <Full><Inp label="Address / Location" value={f.address} onChange={set("address")}/></Full>
+        <Inp label="Phone Number" value={f.phone} onChange={set("phone")}/>
+        <Inp label="Email (optional)" value={f.email} onChange={set("email")} type="email"/>
+      </Grid>
+      <div style={{padding:12,background:"#f4f6f9",borderRadius:8,fontSize:12,color:C.muted}}>These details appear in the app header and on the login screen.</div>
+    </Card>}
+
+    {/* SECURITY */}
+    {tab==="security"&&<Card>
+      <h3 style={{fontSize:14,fontWeight:700,color:C.primary,marginBottom:6}}>Login Credentials</h3>
+      <p style={{fontSize:13,color:C.muted,marginBottom:16}}>Change the username and password to access this app. You will be logged out after saving.</p>
+      <Grid>
+        <Inp label="Admin Username" value={f.username} onChange={set("username")} req/>
+        <Inp label="Admin Password" value={f.password} onChange={set("password")} type="password" req/>
+      </Grid>
+      <div style={{padding:12,background:C.wBg,border:`1px solid ${C.wBd}`,borderRadius:8,fontSize:12,color:C.wTx}}>⚠️ Write down your new password before saving. If forgotten, you will need to clear browser data to reset.</div>
+    </Card>}
+
+    {/* Save */}
+    <div style={{display:"flex",gap:12,alignItems:"center",marginTop:20}}>
+      <button onClick={save} style={{background:C.primary,color:"#fff",border:"none",borderRadius:8,padding:"10px 26px",fontSize:14,fontWeight:700,cursor:"pointer"}}>💾 Save Settings</button>
+      <button onClick={()=>setF({...DEF})} style={{background:"#fff",color:C.muted,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 16px",fontSize:13,cursor:"pointer"}}>Reset to Defaults</button>
+      {ok&&<span style={{fontSize:13,color:C.success,fontWeight:600}}>✓ Saved!</span>}
+    </div>
+  </div>;
+}
+
+/* ── DASHBOARD ───────────────────────────────────────── */
 function Dashboard({cars,sales,expenses,oil,salaries,parts,logs,payments}){
   const wk=WEEKS[0];
   const rev=sales.filter(s=>s.week===wk).reduce((a,b)=>a+b.revenue,0);
-  const tOil=oil.filter(o=>o.week===wk).reduce((a,b)=>a+b.total,0);
-  const tExp=expenses.filter(e=>e.week===wk).reduce((a,b)=>a+b.amount,0);
-  const tSal=salaries.filter(s=>s.week===wk).reduce((a,b)=>a+b.total,0);
-  const tPrt=parts.filter(p=>p.week===wk).reduce((a,b)=>a+b.total,0);
-  const tPay=payments.filter(p=>p.week===wk).reduce((a,b)=>a+b.amount,0);
-  const out=tOil+tExp+tSal+tPrt+tPay;
-  const net=rev-out;
+  const tO=oil.filter(o=>o.week===wk).reduce((a,b)=>a+b.total,0);
+  const tE=expenses.filter(e=>e.week===wk).reduce((a,b)=>a+b.amount,0);
+  const tS=salaries.filter(s=>s.week===wk).reduce((a,b)=>a+b.total,0);
+  const tP=parts.filter(p=>p.week===wk).reduce((a,b)=>a+b.total,0);
+  const tPy=payments.filter(p=>p.week===wk).reduce((a,b)=>a+b.amount,0);
+  const out=tO+tE+tS+tP+tPy;const net=rev-out;
   const ws=sales.filter(s=>s.week===wk);
   const open=logs.filter(l=>l.status!=="Resolved").length;
   return <div style={{padding:24,display:"flex",flexDirection:"column",gap:20}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-      <div><h1 style={{fontSize:20,fontWeight:700,color:C.primary,margin:0}}>Dashboard</h1>
-        <p style={{margin:"4px 0 0",fontSize:13,color:C.muted}}>Current: {wk}</p></div>
+      <div><h1 style={{fontSize:20,fontWeight:700,color:C.primary,margin:0}}>Dashboard</h1><p style={{margin:"4px 0 0",fontSize:13,color:C.muted}}>Current: {wk}</p></div>
       <div style={{fontSize:12,color:C.muted}}>{new Date().toDateString()}</div>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:14}}>
-      <MC label="Weekly Revenue" value={GHC(rev)} sub={`${ws.length} drivers`}/>
-      <MC label="Net Profit" value={GHC(net)} sub="After all expenses" color={net>=0?"#e9f5ee":"#fceaea"}/>
-      <MC label="Fleet Size" value={cars.length} sub={`${cars.filter(c=>c.status==="Active").length} active`}/>
-      <MC label="Open Issues" value={open} sub="Accidents & claims" color={open>0?C.warnBg:"#f4f6f9"}/>
-      <MC label="Payroll Paid" value={GHC(salaries.filter(s=>s.week===wk&&s.status==="Paid").reduce((a,b)=>a+b.total,0))} sub="This week"/>
+      <Metric label="Weekly Revenue" value={GHC(rev)} sub={`${ws.length} drivers`}/>
+      <Metric label="Net Profit" value={GHC(net)} sub="After all expenses" color={net>=0?"#e9f5ee":"#fceaea"}/>
+      <Metric label="Fleet Size" value={cars.length} sub={`${cars.filter(c=>c.status==="Active").length} active`}/>
+      <Metric label="Open Issues" value={open} sub="Accidents & claims" color={open>0?C.wBg:"#f4f6f9"}/>
+      <Metric label="Payroll Paid" value={GHC(salaries.filter(s=>s.week===wk&&s.status==="Paid").reduce((a,b)=>a+b.total,0))} sub="This week"/>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18}}>
       <Card>
-        <ST title="Top Earners — This Week"/>
-        <table style={{fontSize:13}}><thead><tr>{["Driver","Trips","Revenue"].map(h=><th key={h} style={{padding:"8px 12px",background:"#f4f6f9",color:C.muted,fontWeight:600,textAlign:"left",borderBottom:`1px solid ${C.border}`}}>{h}</th>)}</tr></thead>
-        <tbody>{[...ws].sort((a,b)=>b.revenue-a.revenue).map((s,i)=><tr key={i} style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:"9px 12px"}}>{s.driver}</td><td style={{padding:"9px 12px"}}>{s.trips}</td><td style={{padding:"9px 12px",color:C.success,fontWeight:600}}>{GHC(s.revenue)}</td></tr>)}</tbody></table>
+        <Row title="Top Earners — This Week"/>
+        <table><THead cols={["Driver","Trips","Revenue"]}/>
+        <tbody>{[...ws].sort((a,b)=>b.revenue-a.revenue).map((s,i)=><TRow key={i} cells={[s.driver,s.trips,<span style={{color:C.success,fontWeight:600}}>{GHC(s.revenue)}</span>]}/>)}</tbody></table>
       </Card>
       <Card>
-        <ST title="Expense Breakdown"/>
-        {[["Oil",tOil],["Salaries",tSal],["Parts",tPrt],["Payments to Others",tPay],["Other Expenses",tExp]].map(([l,v])=>
-          <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
-            <span style={{color:C.muted}}>{l}</span><span style={{fontWeight:600}}>{GHC(v)}</span>
-          </div>)}
-        <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0 0",fontSize:14,fontWeight:700}}>
-          <span>Total Out</span><span style={{color:C.danger}}>{GHC(out)}</span>
-        </div>
+        <Row title="Expense Breakdown"/>
+        {[["Oil",tO],["Salaries",tS],["Parts",tP],["Payments to Others",tPy],["Other Expenses",tE]].map(([l,v])=>
+          <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}><span style={{color:C.muted}}>{l}</span><span style={{fontWeight:600}}>{GHC(v)}</span></div>)}
+        <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0 0",fontSize:14,fontWeight:700}}><span>Total Out</span><span style={{color:C.danger}}>{GHC(out)}</span></div>
       </Card>
     </div>
-    <Card><ST title="Recent Issues"/>
-      <table style={{fontSize:13}}><thead><tr>{["Date","Car","Driver","Type","Status"].map(h=><th key={h} style={{padding:"8px 12px",background:"#f4f6f9",color:C.muted,fontWeight:600,textAlign:"left",borderBottom:`1px solid ${C.border}`}}>{h}</th>)}</tr></thead>
-      <tbody>{logs.slice(0,4).map((l,i)=><tr key={i} style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:"9px 12px"}}>{l.date}</td><td style={{padding:"9px 12px"}}>{l.carID}</td><td style={{padding:"9px 12px"}}>{l.driver}</td><td style={{padding:"9px 12px"}}>{l.type}</td><td style={{padding:"9px 12px"}}><SBadge s={l.status}/></td></tr>)}</tbody></table>
+    <Card>
+      <Row title="Recent Issues"/>
+      <table><THead cols={["Date","Car","Driver","Type","Status"]}/>
+      <tbody>{logs.slice(0,4).map((l,i)=><TRow key={i} cells={[l.date,l.carID,l.driver,l.type,<SBdg s={l.status}/>]}/>)}</tbody></table>
     </Card>
   </div>;
 }
 
-// ─── FINANCIAL CHART ──────────────────────────────────────────────────────
-function FinancialChart({sales,expenses,oil,salaries,parts,payments}){
-  const barRef=useRef(null),pieRef=useRef(null),lineRef=useRef(null);
-  const charts=useRef({});
-  const allWeeks=[...new Set([...sales,...oil,...salaries,...parts,...payments,...expenses].map(x=>x.week))].slice(0,5).reverse();
-  const wd=allWeeks.map(wk=>({
-    week:wk,
-    revenue:sales.filter(s=>s.week===wk).reduce((a,b)=>a+b.revenue,0),
-    oil:oil.filter(o=>o.week===wk).reduce((a,b)=>a+b.total,0),
-    salaries:salaries.filter(s=>s.week===wk).reduce((a,b)=>a+b.total,0),
-    parts:parts.filter(p=>p.week===wk).reduce((a,b)=>a+b.total,0),
-    expenses:expenses.filter(e=>e.week===wk).reduce((a,b)=>a+b.amount,0),
-    payments:payments.filter(p=>p.week===wk).reduce((a,b)=>a+b.amount,0),
-  }));
-  const wl=allWeeks.map(w=>w.replace(/\(.*\)/,"").trim());
+/* ── FINANCIAL CHART ─────────────────────────────────── */
+function Finance({sales,expenses,oil,salaries,parts,payments}){
+  const bRef=useRef(),pRef=useRef(),lRef=useRef(),charts=useRef({});
+  const allW=[...new Set([...sales,...oil,...salaries,...parts,...payments,...expenses].map(x=>x.week))].slice(0,5).reverse();
+  const wd=allW.map(wk=>({wk,rev:sales.filter(s=>s.week===wk).reduce((a,b)=>a+b.revenue,0),oil:oil.filter(o=>o.week===wk).reduce((a,b)=>a+b.total,0),sal:salaries.filter(s=>s.week===wk).reduce((a,b)=>a+b.total,0),pts:parts.filter(p=>p.week===wk).reduce((a,b)=>a+b.total,0),exp:expenses.filter(e=>e.week===wk).reduce((a,b)=>a+b.amount,0),pay:payments.filter(p=>p.week===wk).reduce((a,b)=>a+b.amount,0)}));
+  const labs=allW.map(w=>w.replace(/\(.*\)/,"").trim());
   useEffect(()=>{
     Object.values(charts.current).forEach(c=>c?.destroy());
-    charts.current.bar=new Chart(barRef.current,{type:"bar",data:{labels:wl,datasets:[{label:"Revenue",data:wd.map(d=>d.revenue),backgroundColor:"rgba(26,122,74,0.8)",borderRadius:4},{label:"Total Out",data:wd.map(d=>d.oil+d.salaries+d.parts+d.expenses+d.payments),backgroundColor:"rgba(185,48,48,0.75)",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"top"}},scales:{y:{beginAtZero:true,ticks:{callback:v=>"GH₵"+v.toLocaleString()}},x:{grid:{display:false}}}}});
+    charts.current.bar=new Chart(bRef.current,{type:"bar",data:{labels:labs,datasets:[{label:"Revenue",data:wd.map(d=>d.rev),backgroundColor:"rgba(26,122,74,0.8)",borderRadius:4},{label:"Total Out",data:wd.map(d=>d.oil+d.sal+d.pts+d.exp+d.pay),backgroundColor:"rgba(185,48,48,0.75)",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"top"}},scales:{y:{beginAtZero:true,ticks:{callback:v=>"GH₵"+v.toLocaleString()}},x:{grid:{display:false}}}}});
     const lat=wd[wd.length-1]||{};
-    charts.current.pie=new Chart(pieRef.current,{type:"doughnut",data:{labels:["Oil","Salaries","Parts","Other Exp","Payments"],datasets:[{data:[lat.oil||0,lat.salaries||0,lat.parts||0,lat.expenses||0,lat.payments||0],backgroundColor:["#e8a020","#1a3a5c","#e05050","#1a5cbf","#1a7a4a"],borderWidth:2,borderColor:"#fff"}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"right",labels:{font:{size:11},padding:10}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: GH₵${ctx.parsed.toLocaleString()}`}}}}});
-    charts.current.line=new Chart(lineRef.current,{type:"line",data:{labels:wl,datasets:[{label:"Net Profit",data:wd.map(d=>d.revenue-(d.oil+d.salaries+d.parts+d.expenses+d.payments)),borderColor:"#1a3a5c",backgroundColor:"rgba(26,58,92,0.08)",fill:true,tension:0.3,pointRadius:5},{label:"Revenue",data:wd.map(d=>d.revenue),borderColor:"#1a7a4a",tension:0.3,pointRadius:4,borderDash:[5,3]}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"top"}},scales:{y:{ticks:{callback:v=>"GH₵"+v.toLocaleString()}},x:{grid:{display:false}}}}});
+    charts.current.pie=new Chart(pRef.current,{type:"doughnut",data:{labels:["Oil","Salaries","Parts","Other Exp","Payments"],datasets:[{data:[lat.oil||0,lat.sal||0,lat.pts||0,lat.exp||0,lat.pay||0],backgroundColor:["#e8a020","#1a3a5c","#e05050","#1a5cbf","#1a7a4a"],borderWidth:2,borderColor:"#fff"}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"right",labels:{font:{size:11},padding:10}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: GH₵${ctx.parsed.toLocaleString()}`}}}}});
+    charts.current.line=new Chart(lRef.current,{type:"line",data:{labels:labs,datasets:[{label:"Net Profit",data:wd.map(d=>d.rev-(d.oil+d.sal+d.pts+d.exp+d.pay)),borderColor:"#1a3a5c",backgroundColor:"rgba(26,58,92,0.08)",fill:true,tension:0.3,pointRadius:5},{label:"Revenue",data:wd.map(d=>d.rev),borderColor:"#1a7a4a",tension:0.3,pointRadius:4,borderDash:[5,3]}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"top"}},scales:{y:{ticks:{callback:v=>"GH₵"+v.toLocaleString()}},x:{grid:{display:false}}}}});
     return()=>Object.values(charts.current).forEach(c=>c?.destroy());
   },[JSON.stringify(wd)]);
-  const lat=wd[wd.length-1]||{};
-  const totalOut=(lat.oil||0)+(lat.salaries||0)+(lat.parts||0)+(lat.expenses||0)+(lat.payments||0);
-  const net=(lat.revenue||0)-totalOut;
+  const lat=wd[wd.length-1]||{};const out=(lat.oil||0)+(lat.sal||0)+(lat.pts||0)+(lat.exp||0)+(lat.pay||0);const net=(lat.rev||0)-out;
   return <div style={{padding:24,display:"flex",flexDirection:"column",gap:20}}>
     <h1 style={{fontSize:20,fontWeight:700,color:C.primary,margin:0}}>Financial Charts — Money In vs Out</h1>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:14}}>
-      <MC label="Latest Revenue" value={GHC(lat.revenue||0)} sub="Money In" color="#e9f5ee"/>
-      <MC label="Latest Expenses" value={GHC(totalOut)} sub="Money Out" color="#fceaea"/>
-      <MC label="Net Profit" value={GHC(net)} sub={net>=0?"Positive":"Loss"} color={net>=0?"#e9f5ee":"#fceaea"}/>
+      <Metric label="Latest Revenue" value={GHC(lat.rev||0)} sub="Money In" color="#e9f5ee"/>
+      <Metric label="Latest Expenses" value={GHC(out)} sub="Money Out" color="#fceaea"/>
+      <Metric label="Net Profit" value={GHC(net)} sub={net>=0?"Positive":"Loss"} color={net>=0?"#e9f5ee":"#fceaea"}/>
     </div>
-    <Card><h3 style={{fontSize:14,fontWeight:600,color:C.primary,marginBottom:14}}>Revenue vs Total Expenses by Week</h3><div style={{height:280}}><canvas ref={barRef}/></div></Card>
+    <Card><h3 style={{fontSize:14,fontWeight:600,color:C.primary,marginBottom:14}}>Revenue vs Total Expenses by Week</h3><div style={{height:280}}><canvas ref={bRef}/></div></Card>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18}}>
-      <Card><h3 style={{fontSize:14,fontWeight:600,color:C.primary,marginBottom:14}}>Expense Breakdown — Latest Week</h3><div style={{height:240}}><canvas ref={pieRef}/></div></Card>
-      <Card><h3 style={{fontSize:14,fontWeight:600,color:C.primary,marginBottom:14}}>Net Profit Trend</h3><div style={{height:240}}><canvas ref={lineRef}/></div></Card>
+      <Card><h3 style={{fontSize:14,fontWeight:600,color:C.primary,marginBottom:14}}>Expense Breakdown — Latest Week</h3><div style={{height:240}}><canvas ref={pRef}/></div></Card>
+      <Card><h3 style={{fontSize:14,fontWeight:600,color:C.primary,marginBottom:14}}>Net Profit Trend</h3><div style={{height:240}}><canvas ref={lRef}/></div></Card>
     </div>
     <Card>
       <h3 style={{fontSize:14,fontWeight:600,color:C.primary,marginBottom:14}}>Weekly Summary</h3>
-      <div style={{overflowX:"auto"}}><table style={{fontSize:13}}><thead><tr>{["Week","Revenue","Oil","Salaries","Parts","Expenses","Payments","Total Out","Net"].map(h=><th key={h} style={{padding:"8px 12px",background:"#f4f6f9",color:C.muted,fontWeight:600,textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
-      <tbody>{wd.map((d,i)=>{const o=d.oil+d.salaries+d.parts+d.expenses+d.payments,n=d.revenue-o;return<tr key={i} style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:"9px 12px",whiteSpace:"nowrap"}}>{d.week}</td><td style={{padding:"9px 12px",color:C.success,fontWeight:600}}>{GHC(d.revenue)}</td><td style={{padding:"9px 12px"}}>{GHC(d.oil)}</td><td style={{padding:"9px 12px"}}>{GHC(d.salaries)}</td><td style={{padding:"9px 12px"}}>{GHC(d.parts)}</td><td style={{padding:"9px 12px"}}>{GHC(d.expenses)}</td><td style={{padding:"9px 12px"}}>{GHC(d.payments)}</td><td style={{padding:"9px 12px",color:C.danger,fontWeight:600}}>{GHC(o)}</td><td style={{padding:"9px 12px",color:n>=0?C.success:C.danger,fontWeight:700}}>{GHC(n)}</td></tr>;})}</tbody></table></div>
+      <div style={{overflowX:"auto"}}><table><THead cols={["Week","Revenue","Oil","Salaries","Parts","Expenses","Payments","Total Out","Net"]}/>
+      <tbody>{wd.map((d,i)=>{const o=d.oil+d.sal+d.pts+d.exp+d.pay,n=d.rev-o;return<TRow key={i} cells={[d.wk,<span style={{color:C.success,fontWeight:600}}>{GHC(d.rev)}</span>,GHC(d.oil),GHC(d.sal),GHC(d.pts),GHC(d.exp),GHC(d.pay),<span style={{color:C.danger,fontWeight:600}}>{GHC(o)}</span>,<span style={{color:n>=0?C.success:C.danger,fontWeight:700}}>{GHC(n)}</span>]}/>;})}</tbody></table></div>
     </Card>
   </div>;
 }
 
-// ─── FLEET PAGE ───────────────────────────────────────────────────────────
-function CarsPage({cars,setCars}){
+/* ── FLEET ───────────────────────────────────────────── */
+function Fleet({cars,setCars}){
   const blank={id:"",plate:"",make:"",driver:"",driverID:"",status:"Active"};
-  const [modal,setModal]=useState(null); // null | {mode:'add'|'edit', data}
-  const [confirm,setConfirm]=useState(null);
-  const openAdd=()=>setModal({mode:"add",data:{...blank}});
-  const openEdit=r=>setModal({mode:"edit",data:{...r}});
-  const save=()=>{
-    const d=modal.data;
-    if(!d.id||!d.plate||!d.driver)return alert("Fill required fields");
-    let next;
-    if(modal.mode==="add") next=[...cars,d];
-    else next=cars.map(c=>c.id===d.id?d:c);
-    setCars(next);save_("cars",next);setModal(null);
-  };
-  const del=id=>{const next=cars.filter(c=>c.id!==id);setCars(next);save_("cars",next);setConfirm(null);};
-  const fld=k=>v=>setModal(m=>({...m,data:{...m.data,[k]:v}}));
+  const [M,setM]=useState(null),[del,setDel]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{const d=M.data;if(!d.id||!d.plate||!d.driver)return alert("Fill required fields");const next=M.mode==="add"?[...cars,d]:cars.map(c=>c.id===d.id?d:c);setCars(next);saveData("cars",next);setM(null);};
+  const remove=id=>{const next=cars.filter(c=>c.id!==id);setCars(next);saveData("cars",next);setDel(null);};
   return <div style={{padding:24}}>
-    <ST title="Fleet & Driver Registry" action={<Btn onClick={openAdd}>+ Add Vehicle</Btn>}/>
-    <Card>
-      <div style={{overflowX:"auto"}}><table style={{fontSize:13}}><thead><tr>{["Car ID","Plate","Make / Model","Driver","Driver ID","Status","Actions"].map(h=><th key={h} style={{padding:"8px 12px",background:"#f4f6f9",color:C.muted,fontWeight:600,textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
-      <tbody>{cars.map((c,i)=><tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
-        <td style={{padding:"9px 12px",fontWeight:600,color:C.primary}}>{c.id}</td>
-        <td style={{padding:"9px 12px"}}>{c.plate}</td>
-        <td style={{padding:"9px 12px"}}>{c.make}</td>
-        <td style={{padding:"9px 12px"}}>{c.driver}</td>
-        <td style={{padding:"9px 12px",fontFamily:"monospace",fontSize:11}}>{c.driverID}</td>
-        <td style={{padding:"9px 12px"}}><SBadge s={c.status}/></td>
-        <td style={{padding:"9px 12px"}}><div style={{display:"flex",gap:6}}>
-          <Btn small variant="outline" onClick={()=>openEdit(c)}>✏️ Edit</Btn>
-          <Btn small variant="ghost" danger onClick={()=>setConfirm(c.id)}>🗑️</Btn>
-        </div></td>
-      </tr>)}</tbody></table></div>
-    </Card>
-    {modal&&<Modal title={modal.mode==="add"?"Add Vehicle":"Edit Vehicle"} onClose={()=>setModal(null)}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-        <Inp label="Car ID" value={modal.data.id} onChange={fld("id")} required/>
-        <Inp label="Plate Number" value={modal.data.plate} onChange={fld("plate")} required/>
-        <Inp label="Make / Model" value={modal.data.make} onChange={fld("make")}/>
-        <Inp label="Driver Name" value={modal.data.driver} onChange={fld("driver")} required/>
-        <Inp label="Driver ID" value={modal.data.driverID} onChange={fld("driverID")}/>
-        <Inp label="Status" value={modal.data.status} onChange={fld("status")} options={["Active","Maintenance","Inactive"]}/>
-      </div>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn variant="ghost" onClick={()=>setModal(null)}>Cancel</Btn>
-        <Btn variant="accent" onClick={save}>Save</Btn>
-      </div>
+    <Row title="Fleet & Driver Registry" action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Vehicle</Btn>}/>
+    <Card><div style={{overflowX:"auto"}}><table><THead cols={["Car ID","Plate","Make/Model","Driver","Driver ID","Status","Actions"]}/>
+    <tbody>{cars.map((c,i)=><TRow key={i} cells={[<b style={{color:C.primary}}>{c.id}</b>,c.plate,c.make,c.driver,<span style={{fontFamily:"monospace",fontSize:11}}>{c.driverID}</span>,<SBdg s={c.status}/>,<ActBtns onEdit={()=>setM({mode:"edit",data:{...c}})} onDel={()=>setDel(c.id)}/>]}/>)}</tbody></table></div></Card>
+    {M&&<Modal title={M.mode==="add"?"Add Vehicle":"Edit Vehicle"} onClose={()=>setM(null)}>
+      <Grid><Inp label="Car ID" value={M.data.id} onChange={f("id")} req/><Inp label="Plate" value={M.data.plate} onChange={f("plate")} req/><Inp label="Make/Model" value={M.data.make} onChange={f("make")}/><Inp label="Driver Name" value={M.data.driver} onChange={f("driver")} req/><Inp label="Driver ID" value={M.data.driverID} onChange={f("driverID")}/><Inp label="Status" value={M.data.status} onChange={f("status")} opts={["Active","Maintenance","Inactive"]}/></Grid>
+      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
     </Modal>}
-    {confirm&&<Modal title="Delete Vehicle?" onClose={()=>setConfirm(null)}>
-      <p style={{fontSize:13,color:C.muted,marginBottom:20}}>This will permanently remove this vehicle from the registry.</p>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn variant="ghost" onClick={()=>setConfirm(null)}>Cancel</Btn>
-        <Btn variant="primary" danger onClick={()=>del(confirm)}>Delete</Btn>
-      </div>
-    </Modal>}
+    {del&&<ConfirmModal msg="Remove this vehicle from the registry?" onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
   </div>;
 }
 
-// ─── GENERIC CRUD HELPERS ─────────────────────────────────────────────────
-const save_ = (key,val) => save(key,val);
-
-function useListCRUD(key,initial){
-  const [list,setList]=useState(initial);
-  const update=useCallback(next=>{setList(next);save_(key,next);},[key]);
-  const add=item=>{const next=[...list,{...item,id:uid()}];update(next);};
-  const edit=(id,item)=>{const next=list.map(x=>x.id===id?{...item,id}:x);update(next);};
-  const del=id=>{const next=list.filter(x=>x.id!==id);update(next);};
-  return{list,add,edit,del,setList:update};
-}
-
-// ─── SALES PAGE ───────────────────────────────────────────────────────────
-function SalesPage({sales,setSales,carIDs}){
+/* ── SALES ───────────────────────────────────────────── */
+function Sales({sales,setSales,carIDs}){
   const blank={week:WEEKS[0],driver:"",carID:carIDs[0]||"",trips:"",revenue:"",fuel:""};
-  const [modal,setModal]=useState(null);
-  const [confirm,setConfirm]=useState(null);
-  const openAdd=()=>setModal({mode:"add",data:{...blank}});
-  const openEdit=r=>setModal({mode:"edit",data:{...r,trips:String(r.trips),revenue:String(r.revenue),fuel:String(r.fuel)}});
-  const save=()=>{
-    const d=modal.data;
-    if(!d.driver||!d.revenue)return alert("Fill required fields");
-    const net=Number(d.revenue)-Number(d.fuel||0);
-    const item={...d,trips:Number(d.trips),revenue:Number(d.revenue),fuel:Number(d.fuel||0),net};
-    let next;
-    if(modal.mode==="add") next=[...sales,{...item,id:uid()}];
-    else next=sales.map(s=>s.id===modal.data.id?{...item,id:modal.data.id}:s);
-    setSales(next);save_("sales",next);setModal(null);
-  };
-  const del=id=>{const next=sales.filter(s=>s.id!==id);setSales(next);save_("sales",next);setConfirm(null);};
-  const fld=k=>v=>setModal(m=>({...m,data:{...m.data,[k]:v}}));
+  const [M,setM]=useState(null),[del,setDel]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{const d=M.data;if(!d.driver||!d.revenue)return alert("Fill required fields");const net=Number(d.revenue)-Number(d.fuel||0);const item={...d,id:M.mode==="add"?uid():M.data.id,trips:Number(d.trips),revenue:Number(d.revenue),fuel:Number(d.fuel||0),net};const next=M.mode==="add"?[...sales,item]:sales.map(s=>s.id===item.id?item:s);setSales(next);saveData("sales",next);setM(null);};
+  const remove=id=>{const next=sales.filter(s=>s.id!==id);setSales(next);saveData("sales",next);setDel(null);};
   const weeks=[...new Set(sales.map(s=>s.week))];
   return <div style={{padding:24}}>
-    <ST title="Weekly Sales by Driver" action={<Btn onClick={openAdd}>+ Add Record</Btn>}/>
-    {weeks.map(wk=>{
-      const rows=sales.filter(s=>s.week===wk);
-      const total=rows.reduce((a,b)=>a+b.revenue,0);
-      return <Card key={wk} style={{marginBottom:18}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:14,alignItems:"center"}}>
-          <span style={{fontWeight:700,fontSize:14,color:C.primary}}>{wk}</span>
-          <span style={{fontSize:13,color:C.success,fontWeight:600}}>Total: {GHC(total)}</span>
-        </div>
-        <div style={{overflowX:"auto"}}><table style={{fontSize:13}}><thead><tr>{["Driver","Car","Trips","Revenue","Fuel","Net",""].map((h,i)=><th key={i} style={{padding:"8px 12px",background:"#f4f6f9",color:C.muted,fontWeight:600,textAlign:"left",borderBottom:`1px solid ${C.border}`}}>{h}</th>)}</tr></thead>
-        <tbody>{rows.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
-          <td style={{padding:"9px 12px"}}>{r.driver}</td>
-          <td style={{padding:"9px 12px"}}>{r.carID}</td>
-          <td style={{padding:"9px 12px"}}>{r.trips}</td>
-          <td style={{padding:"9px 12px",color:C.info,fontWeight:600}}>{GHC(r.revenue)}</td>
-          <td style={{padding:"9px 12px",color:C.danger}}>{GHC(r.fuel)}</td>
-          <td style={{padding:"9px 12px",color:C.success,fontWeight:600}}>{GHC(r.net)}</td>
-          <td style={{padding:"9px 12px"}}><div style={{display:"flex",gap:6}}>
-            <Btn small variant="outline" onClick={()=>openEdit(r)}>✏️</Btn>
-            <Btn small variant="ghost" danger onClick={()=>setConfirm(r.id)}>🗑️</Btn>
-          </div></td>
-        </tr>)}</tbody></table></div>
-      </Card>;
-    })}
-    {modal&&<Modal title={modal.mode==="add"?"Add Sales Record":"Edit Sales Record"} onClose={()=>setModal(null)}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-        <Inp label="Week" value={modal.data.week} onChange={fld("week")} options={WEEKS}/>
-        <Inp label="Driver Name" value={modal.data.driver} onChange={fld("driver")} required/>
-        <Inp label="Car ID" value={modal.data.carID} onChange={fld("carID")} options={carIDs}/>
-        <Inp label="Trips" value={modal.data.trips} onChange={fld("trips")} type="number"/>
-        <Inp label="Revenue (GH₵)" value={modal.data.revenue} onChange={fld("revenue")} type="number" required/>
-        <Inp label="Fuel Cost (GH₵)" value={modal.data.fuel} onChange={fld("fuel")} type="number"/>
-      </div>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn variant="ghost" onClick={()=>setModal(null)}>Cancel</Btn>
-        <Btn variant="accent" onClick={save}>Save</Btn>
-      </div>
+    <Row title="Weekly Sales by Driver" action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Record</Btn>}/>
+    {weeks.map(wk=>{const rows=sales.filter(s=>s.week===wk);const tot=rows.reduce((a,b)=>a+b.revenue,0);return<Card key={wk} style={{marginBottom:18}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:14,alignItems:"center"}}><span style={{fontWeight:700,fontSize:14,color:C.primary}}>{wk}</span><span style={{fontSize:13,color:C.success,fontWeight:600}}>Total: {GHC(tot)}</span></div>
+      <div style={{overflowX:"auto"}}><table><THead cols={["Driver","Car","Trips","Revenue","Fuel","Net",""]}/>
+      <tbody>{rows.map((r,i)=><TRow key={i} cells={[r.driver,r.carID,r.trips,<span style={{color:C.info,fontWeight:600}}>{GHC(r.revenue)}</span>,<span style={{color:C.danger}}>{GHC(r.fuel)}</span>,<span style={{color:C.success,fontWeight:600}}>{GHC(r.net)}</span>,<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,trips:String(r.trips),revenue:String(r.revenue),fuel:String(r.fuel)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table></div>
+    </Card>;})}
+    {M&&<Modal title={M.mode==="add"?"Add Sales Record":"Edit Sales Record"} onClose={()=>setM(null)}>
+      <Grid><Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS}/><Inp label="Driver" value={M.data.driver} onChange={f("driver")} req/><Inp label="Car ID" value={M.data.carID} onChange={f("carID")} opts={carIDs}/><Inp label="Trips" value={M.data.trips} onChange={f("trips")} type="number"/><Inp label="Revenue (GH₵)" value={M.data.revenue} onChange={f("revenue")} type="number" req/><Inp label="Fuel Cost (GH₵)" value={M.data.fuel} onChange={f("fuel")} type="number"/></Grid>
+      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
     </Modal>}
-    {confirm&&<Modal title="Delete Record?" onClose={()=>setConfirm(null)}>
-      <p style={{fontSize:13,color:C.muted,marginBottom:20}}>This sales record will be permanently deleted.</p>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn variant="ghost" onClick={()=>setConfirm(null)}>Cancel</Btn>
-        <Btn variant="primary" danger onClick={()=>del(confirm)}>Delete</Btn>
-      </div>
-    </Modal>}
+    {del&&<ConfirmModal msg="Delete this sales record?" onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
   </div>;
 }
 
-// ─── PAYMENTS PAGE ────────────────────────────────────────────────────────
-function PaymentsPage({payments,setPayments}){
+/* ── PAYMENTS TO OTHERS ──────────────────────────────── */
+function Payments({payments,setPayments}){
   const blank={week:WEEKS[0],payee:"",purpose:"",amount:"",method:"Cash",status:"Pending"};
-  const [modal,setModal]=useState(null);
-  const [confirm,setConfirm]=useState(null);
-  const openAdd=()=>setModal({mode:"add",data:{...blank}});
-  const openEdit=r=>setModal({mode:"edit",data:{...r,amount:String(r.amount)}});
-  const save=()=>{
-    const d=modal.data;
-    if(!d.payee||!d.amount)return alert("Fill required fields");
-    const item={...d,amount:Number(d.amount)};
-    let next;
-    if(modal.mode==="add") next=[...payments,{...item,id:uid()}];
-    else next=payments.map(p=>p.id===modal.data.id?{...item,id:modal.data.id}:p);
-    setPayments(next);save_("payments",next);setModal(null);
-  };
-  const del=id=>{const next=payments.filter(p=>p.id!==id);setPayments(next);save_("payments",next);setConfirm(null);};
-  const fld=k=>v=>setModal(m=>({...m,data:{...m.data,[k]:v}}));
+  const [M,setM]=useState(null),[del,setDel]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{const d=M.data;if(!d.payee||!d.amount)return alert("Fill required fields");const item={...d,id:M.mode==="add"?uid():d.id,amount:Number(d.amount)};const next=M.mode==="add"?[...payments,item]:payments.map(p=>p.id===item.id?item:p);setPayments(next);saveData("payments",next);setM(null);};
+  const remove=id=>{const next=payments.filter(p=>p.id!==id);setPayments(next);saveData("payments",next);setDel(null);};
+  const toggle=id=>{const next=payments.map(x=>x.id===id?{...x,status:x.status==="Paid"?"Pending":"Paid"}:x);setPayments(next);saveData("payments",next);};
   const weeks=[...new Set(payments.map(p=>p.week))];
   const grand=payments.reduce((a,b)=>a+b.amount,0);
   return <div style={{padding:24}}>
-    <ST title="Weekly Payments to Others" action={<Btn onClick={openAdd}>+ Add Payment</Btn>}/>
+    <Row title="Weekly Payments to Others" action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Payment</Btn>}/>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:14,marginBottom:20}}>
-      <MC label="Total (All Weeks)" value={GHC(grand)} sub="Combined"/>
-      <MC label="Pending" value={GHC(payments.filter(p=>p.status==="Pending").reduce((a,b)=>a+b.amount,0))} sub="Awaiting" color={payments.some(p=>p.status==="Pending")?C.warnBg:"#f4f6f9"}/>
-      <MC label="This Week" value={GHC(payments.filter(p=>p.week===WEEKS[0]).reduce((a,b)=>a+b.amount,0))} sub={WEEKS[0]}/>
+      <Metric label="Total (All Weeks)" value={GHC(grand)} sub="Combined"/>
+      <Metric label="Pending" value={GHC(payments.filter(p=>p.status==="Pending").reduce((a,b)=>a+b.amount,0))} sub="Awaiting" color={payments.some(p=>p.status==="Pending")?C.wBg:"#f4f6f9"}/>
+      <Metric label="This Week" value={GHC(payments.filter(p=>p.week===WEEKS[0]).reduce((a,b)=>a+b.amount,0))} sub={WEEKS[0]}/>
     </div>
-    {weeks.map(wk=>{
-      const rows=payments.filter(p=>p.week===wk);
-      const total=rows.reduce((a,b)=>a+b.amount,0);
-      return <Card key={wk} style={{marginBottom:18}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:14,alignItems:"center"}}>
-          <span style={{fontWeight:700,fontSize:14,color:C.primary}}>{wk}</span>
-          <span style={{fontSize:13,color:C.danger,fontWeight:600}}>Total: {GHC(total)}</span>
-        </div>
-        <div style={{overflowX:"auto"}}><table style={{fontSize:13}}><thead><tr>{["Payee","Purpose","Amount","Method","Status",""].map((h,i)=><th key={i} style={{padding:"8px 12px",background:"#f4f6f9",color:C.muted,fontWeight:600,textAlign:"left",borderBottom:`1px solid ${C.border}`}}>{h}</th>)}</tr></thead>
-        <tbody>{rows.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
-          <td style={{padding:"9px 12px",fontWeight:600}}>{r.payee}</td>
-          <td style={{padding:"9px 12px",color:C.muted,fontSize:12}}>{r.purpose||"—"}</td>
-          <td style={{padding:"9px 12px",color:C.danger,fontWeight:600}}>{GHC(r.amount)}</td>
-          <td style={{padding:"9px 12px"}}><Badge label={r.method} color={C.info} bg={C.infoBg} border="#a5c2f2"/></td>
-          <td style={{padding:"9px 12px"}}><SBadge s={r.status}/></td>
-          <td style={{padding:"9px 12px"}}><div style={{display:"flex",gap:6}}>
-            <Btn small variant="outline" onClick={()=>openEdit(r)}>✏️</Btn>
-            <Btn small variant="ghost" danger onClick={()=>setConfirm(r.id)}>🗑️</Btn>
-          </div></td>
-        </tr>)}</tbody></table></div>
-      </Card>;
-    })}
-    {modal&&<Modal title={modal.mode==="add"?"Add Payment":"Edit Payment"} onClose={()=>setModal(null)}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-        <Inp label="Week" value={modal.data.week} onChange={fld("week")} options={WEEKS}/>
-        <Inp label="Payee / Recipient" value={modal.data.payee} onChange={fld("payee")} required/>
-        <Inp label="Purpose" value={modal.data.purpose} onChange={fld("purpose")}/>
-        <Inp label="Amount (GH₵)" value={modal.data.amount} onChange={fld("amount")} type="number" required/>
-        <Inp label="Method" value={modal.data.method} onChange={fld("method")} options={["Cash","Mobile Money","Bank Transfer","Cheque"]}/>
-        <Inp label="Status" value={modal.data.status} onChange={fld("status")} options={["Pending","Paid"]}/>
-      </div>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn variant="ghost" onClick={()=>setModal(null)}>Cancel</Btn>
-        <Btn variant="accent" onClick={save}>Save</Btn>
-      </div>
+    {weeks.map(wk=>{const rows=payments.filter(p=>p.week===wk);const tot=rows.reduce((a,b)=>a+b.amount,0);return<Card key={wk} style={{marginBottom:18}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:14,alignItems:"center"}}><span style={{fontWeight:700,fontSize:14,color:C.primary}}>{wk}</span><span style={{fontSize:13,color:C.danger,fontWeight:600}}>Total: {GHC(tot)}</span></div>
+      <div style={{overflowX:"auto"}}><table><THead cols={["Payee","Purpose","Amount","Method","Status",""]}/>
+      <tbody>{rows.map((r,i)=><TRow key={i} cells={[<b>{r.payee}</b>,<span style={{color:C.muted,fontSize:12}}>{r.purpose||"—"}</span>,<span style={{color:C.danger,fontWeight:600}}>{GHC(r.amount)}</span>,<Bdg label={r.method} color={C.info} bg={C.iBg} border="#a5c2f2"/>,<span onClick={()=>toggle(r.id)} style={{cursor:"pointer"}}><SBdg s={r.status}/></span>,<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,amount:String(r.amount)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table></div>
+    </Card>;})}
+    {M&&<Modal title={M.mode==="add"?"Add Payment":"Edit Payment"} onClose={()=>setM(null)}>
+      <Grid><Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS}/><Inp label="Payee" value={M.data.payee} onChange={f("payee")} req/><Inp label="Purpose" value={M.data.purpose} onChange={f("purpose")}/><Inp label="Amount (GH₵)" value={M.data.amount} onChange={f("amount")} type="number" req/><Inp label="Method" value={M.data.method} onChange={f("method")} opts={["Cash","Mobile Money","Bank Transfer","Cheque"]}/><Inp label="Status" value={M.data.status} onChange={f("status")} opts={["Pending","Paid"]}/></Grid>
+      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
     </Modal>}
-    {confirm&&<Modal title="Delete Payment?" onClose={()=>setConfirm(null)}>
-      <p style={{fontSize:13,color:C.muted,marginBottom:20}}>This payment record will be permanently deleted.</p>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn variant="ghost" onClick={()=>setConfirm(null)}>Cancel</Btn>
-        <Btn variant="primary" danger onClick={()=>del(confirm)}>Delete</Btn>
-      </div>
-    </Modal>}
+    {del&&<ConfirmModal msg="Delete this payment record?" onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
   </div>;
 }
 
-// ─── EXPENSES PAGE ────────────────────────────────────────────────────────
-function ExpensesPage({expenses,setExpenses}){
+/* ── OTHER EXPENSES ──────────────────────────────────── */
+function Expenses({expenses,setExpenses}){
   const blank={week:WEEKS[0],category:"",recipient:"",amount:"",note:""};
-  const [modal,setModal]=useState(null);
-  const [confirm,setConfirm]=useState(null);
-  const openAdd=()=>setModal({mode:"add",data:{...blank}});
-  const openEdit=r=>setModal({mode:"edit",data:{...r,amount:String(r.amount)}});
-  const save=()=>{
-    const d=modal.data;
-    if(!d.category||!d.amount)return alert("Fill required fields");
-    const item={...d,amount:Number(d.amount)};
-    let next;
-    if(modal.mode==="add") next=[...expenses,{...item,id:uid()}];
-    else next=expenses.map(e=>e.id===modal.data.id?{...item,id:modal.data.id}:e);
-    setExpenses(next);save_("expenses",next);setModal(null);
-  };
-  const del=id=>{const next=expenses.filter(e=>e.id!==id);setExpenses(next);save_("expenses",next);setConfirm(null);};
-  const fld=k=>v=>setModal(m=>({...m,data:{...m.data,[k]:v}}));
+  const [M,setM]=useState(null),[del,setDel]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{const d=M.data;if(!d.category||!d.amount)return alert("Fill required fields");const item={...d,id:M.mode==="add"?uid():d.id,amount:Number(d.amount)};const next=M.mode==="add"?[...expenses,item]:expenses.map(e=>e.id===item.id?item:e);setExpenses(next);saveData("expenses",next);setM(null);};
+  const remove=id=>{const next=expenses.filter(e=>e.id!==id);setExpenses(next);saveData("expenses",next);setDel(null);};
   const weeks=[...new Set(expenses.map(e=>e.week))];
   return <div style={{padding:24}}>
-    <ST title="Other Expenses" action={<Btn onClick={openAdd}>+ Add Expense</Btn>}/>
-    {weeks.map(wk=>{
-      const rows=expenses.filter(e=>e.week===wk);
-      const total=rows.reduce((a,b)=>a+b.amount,0);
-      return <Card key={wk} style={{marginBottom:18}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:14,alignItems:"center"}}>
-          <span style={{fontWeight:700,fontSize:14,color:C.primary}}>{wk}</span>
-          <span style={{fontSize:13,color:C.danger,fontWeight:600}}>Total: {GHC(total)}</span>
-        </div>
-        <div style={{overflowX:"auto"}}><table style={{fontSize:13}}><thead><tr>{["Category","Recipient","Amount","Note",""].map((h,i)=><th key={i} style={{padding:"8px 12px",background:"#f4f6f9",color:C.muted,fontWeight:600,textAlign:"left",borderBottom:`1px solid ${C.border}`}}>{h}</th>)}</tr></thead>
-        <tbody>{rows.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
-          <td style={{padding:"9px 12px"}}><Badge label={r.category} color={C.info} bg={C.infoBg} border="#b5c8f0"/></td>
-          <td style={{padding:"9px 12px"}}>{r.recipient||"—"}</td>
-          <td style={{padding:"9px 12px",color:C.danger,fontWeight:600}}>{GHC(r.amount)}</td>
-          <td style={{padding:"9px 12px",color:C.muted,fontSize:12}}>{r.note||"—"}</td>
-          <td style={{padding:"9px 12px"}}><div style={{display:"flex",gap:6}}>
-            <Btn small variant="outline" onClick={()=>openEdit(r)}>✏️</Btn>
-            <Btn small variant="ghost" danger onClick={()=>setConfirm(r.id)}>🗑️</Btn>
-          </div></td>
-        </tr>)}</tbody></table></div>
-      </Card>;
-    })}
-    {modal&&<Modal title={modal.mode==="add"?"Add Expense":"Edit Expense"} onClose={()=>setModal(null)}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-        <Inp label="Week" value={modal.data.week} onChange={fld("week")} options={WEEKS}/>
-        <Inp label="Category" value={modal.data.category} onChange={fld("category")} options={["Road Tax","Tolls","Cleaning","Parking","Repairs","Other"]} required/>
-        <Inp label="Recipient" value={modal.data.recipient} onChange={fld("recipient")}/>
-        <Inp label="Amount (GH₵)" value={modal.data.amount} onChange={fld("amount")} type="number" required/>
-        <div style={{gridColumn:"1/-1"}}><Inp label="Note" value={modal.data.note} onChange={fld("note")}/></div>
-      </div>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn variant="ghost" onClick={()=>setModal(null)}>Cancel</Btn>
-        <Btn variant="accent" onClick={save}>Save</Btn>
-      </div>
+    <Row title="Other Expenses" action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Expense</Btn>}/>
+    {weeks.map(wk=>{const rows=expenses.filter(e=>e.week===wk);const tot=rows.reduce((a,b)=>a+b.amount,0);return<Card key={wk} style={{marginBottom:18}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:14,alignItems:"center"}}><span style={{fontWeight:700,fontSize:14,color:C.primary}}>{wk}</span><span style={{fontSize:13,color:C.danger,fontWeight:600}}>Total: {GHC(tot)}</span></div>
+      <div style={{overflowX:"auto"}}><table><THead cols={["Category","Recipient","Amount","Note",""]}/>
+      <tbody>{rows.map((r,i)=><TRow key={i} cells={[<Bdg label={r.category} color={C.info} bg={C.iBg} border="#b5c8f0"/>,r.recipient||"—",<span style={{color:C.danger,fontWeight:600}}>{GHC(r.amount)}</span>,<span style={{color:C.muted,fontSize:12}}>{r.note||"—"}</span>,<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,amount:String(r.amount)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table></div>
+    </Card>;})}
+    {M&&<Modal title={M.mode==="add"?"Add Expense":"Edit Expense"} onClose={()=>setM(null)}>
+      <Grid><Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS}/><Inp label="Category" value={M.data.category} onChange={f("category")} opts={["Road Tax","Tolls","Cleaning","Parking","Repairs","Other"]} req/><Inp label="Recipient" value={M.data.recipient} onChange={f("recipient")}/><Inp label="Amount (GH₵)" value={M.data.amount} onChange={f("amount")} type="number" req/><Full><Inp label="Note" value={M.data.note} onChange={f("note")}/></Full></Grid>
+      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
     </Modal>}
-    {confirm&&<Modal title="Delete Expense?" onClose={()=>setConfirm(null)}>
-      <p style={{fontSize:13,color:C.muted,marginBottom:20}}>Delete this expense record permanently?</p>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn variant="ghost" onClick={()=>setConfirm(null)}>Cancel</Btn>
-        <Btn variant="primary" danger onClick={()=>del(confirm)}>Delete</Btn>
-      </div>
-    </Modal>}
+    {del&&<ConfirmModal msg="Delete this expense record?" onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
   </div>;
 }
 
-// ─── OIL PAGE ─────────────────────────────────────────────────────────────
-function OilPage({oil,setOil}){
+/* ── OIL ─────────────────────────────────────────────── */
+function Oil({oil,setOil}){
   const blank={week:WEEKS[0],oilType:"",litres:"",costPerL:"",supplier:"",note:""};
-  const [modal,setModal]=useState(null);
-  const [confirm,setConfirm]=useState(null);
-  const openAdd=()=>setModal({mode:"add",data:{...blank}});
-  const openEdit=r=>setModal({mode:"edit",data:{...r,litres:String(r.litres),costPerL:String(r.costPerL)}});
-  const save=()=>{
-    const d=modal.data;
-    if(!d.oilType||!d.litres)return alert("Fill required fields");
-    const total=Number(d.litres)*Number(d.costPerL||0);
-    const item={...d,litres:Number(d.litres),costPerL:Number(d.costPerL||0),total};
-    let next;
-    if(modal.mode==="add") next=[...oil,{...item,id:uid()}];
-    else next=oil.map(o=>o.id===modal.data.id?{...item,id:modal.data.id}:o);
-    setOil(next);save_("oil",next);setModal(null);
-  };
-  const del=id=>{const next=oil.filter(o=>o.id!==id);setOil(next);save_("oil",next);setConfirm(null);};
-  const fld=k=>v=>setModal(m=>({...m,data:{...m.data,[k]:v}}));
+  const [M,setM]=useState(null),[del,setDel]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{const d=M.data;if(!d.oilType||!d.litres)return alert("Fill required fields");const total=Number(d.litres)*Number(d.costPerL||0);const item={...d,id:M.mode==="add"?uid():d.id,litres:Number(d.litres),costPerL:Number(d.costPerL||0),total};const next=M.mode==="add"?[...oil,item]:oil.map(o=>o.id===item.id?item:o);setOil(next);saveData("oil",next);setM(null);};
+  const remove=id=>{const next=oil.filter(o=>o.id!==id);setOil(next);saveData("oil",next);setDel(null);};
   const grand=oil.reduce((a,b)=>a+b.total,0);
-  const d=modal?.data;
   return <div style={{padding:24}}>
-    <ST title="Oil — Weekly Fleet Purchase" action={<Btn onClick={openAdd}>+ Add Purchase</Btn>}/>
+    <Row title="Oil — Weekly Fleet Purchase" action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Purchase</Btn>}/>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:14,marginBottom:20}}>
-      <MC label="Total Oil Spend" value={GHC(grand)} sub="All weeks"/>
-      <MC label="Avg per Week" value={GHC(Math.round(grand/(oil.length||1)))} sub={`${oil.length} weeks`}/>
-      <MC label="Last Purchase" value={oil[0]?`${oil[0].litres}L`:"—"} sub={oil[0]?.week||""}/>
+      <Metric label="Total Oil Spend" value={GHC(grand)} sub="All weeks"/><Metric label="Avg per Week" value={GHC(Math.round(grand/(oil.length||1)))} sub={`${oil.length} weeks`}/><Metric label="Last Purchase" value={oil[0]?`${oil[0].litres}L`:"—"} sub={oil[0]?.week||""}/>
     </div>
-    <Card>
-      <div style={{overflowX:"auto"}}><table style={{fontSize:13}}><thead><tr>{["Week","Oil Type","Litres","Cost/L","Supplier","Note","Total",""].map((h,i)=><th key={i} style={{padding:"8px 12px",background:"#f4f6f9",color:C.muted,fontWeight:600,textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
-      <tbody>{oil.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
-        <td style={{padding:"9px 12px",whiteSpace:"nowrap"}}>{r.week}</td>
-        <td style={{padding:"9px 12px"}}>{r.oilType}</td>
-        <td style={{padding:"9px 12px"}}>{r.litres}L</td>
-        <td style={{padding:"9px 12px"}}>{GHC(r.costPerL)}</td>
-        <td style={{padding:"9px 12px"}}>{r.supplier||"—"}</td>
-        <td style={{padding:"9px 12px",color:C.muted,fontSize:12}}>{r.note||"—"}</td>
-        <td style={{padding:"9px 12px",color:C.danger,fontWeight:700}}>{GHC(r.total)}</td>
-        <td style={{padding:"9px 12px"}}><div style={{display:"flex",gap:6}}>
-          <Btn small variant="outline" onClick={()=>openEdit(r)}>✏️</Btn>
-          <Btn small variant="ghost" danger onClick={()=>setConfirm(r.id)}>🗑️</Btn>
-        </div></td>
-      </tr>)}</tbody></table></div>
-      <div style={{borderTop:`1px solid ${C.border}`,marginTop:8,paddingTop:10,display:"flex",justifyContent:"flex-end",gap:12,fontSize:13}}>
-        <span style={{color:C.muted}}>Grand Total:</span>
-        <span style={{fontWeight:700,color:C.danger}}>{GHC(grand)}</span>
-      </div>
-    </Card>
-    {modal&&<Modal title={modal.mode==="add"?"Add Oil Purchase":"Edit Oil Purchase"} onClose={()=>setModal(null)}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-        <Inp label="Week" value={d.week} onChange={fld("week")} options={WEEKS}/>
-        <Inp label="Oil Type" value={d.oilType} onChange={fld("oilType")} options={["5W-30 Synthetic","10W-40 Semi","15W-40 Mineral","5W-40 Full Syn"]} required/>
-        <Inp label="Total Litres" value={d.litres} onChange={fld("litres")} type="number" required/>
-        <Inp label="Cost per Litre (GH₵)" value={d.costPerL} onChange={fld("costPerL")} type="number"/>
-        <Inp label="Supplier" value={d.supplier} onChange={fld("supplier")}/>
-        <Inp label="Note" value={d.note} onChange={fld("note")}/>
-      </div>
-      {d.litres&&d.costPerL&&<div style={{marginBottom:14,padding:"10px 14px",background:"#eef2f8",borderRadius:8,fontSize:13}}>
-        Calculated Total: <strong style={{color:C.primary}}>{GHC(Number(d.litres)*Number(d.costPerL))}</strong>
-      </div>}
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn variant="ghost" onClick={()=>setModal(null)}>Cancel</Btn>
-        <Btn variant="accent" onClick={save}>Save</Btn>
-      </div>
+    <Card><div style={{overflowX:"auto"}}><table><THead cols={["Week","Oil Type","Litres","Cost/L","Supplier","Note","Total",""]}/>
+    <tbody>{oil.map((r,i)=><TRow key={i} cells={[r.week,r.oilType,`${r.litres}L`,GHC(r.costPerL),r.supplier||"—",<span style={{color:C.muted,fontSize:12}}>{r.note||"—"}</span>,<span style={{color:C.danger,fontWeight:700}}>{GHC(r.total)}</span>,<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,litres:String(r.litres),costPerL:String(r.costPerL)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table>
+    <div style={{borderTop:`1px solid ${C.border}`,marginTop:8,paddingTop:10,display:"flex",justifyContent:"flex-end",gap:12,fontSize:13}}><span style={{color:C.muted}}>Grand Total:</span><span style={{fontWeight:700,color:C.danger}}>{GHC(grand)}</span></div></div></Card>
+    {M&&<Modal title={M.mode==="add"?"Add Oil Purchase":"Edit Oil Purchase"} onClose={()=>setM(null)}>
+      <Grid><Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS}/><Inp label="Oil Type" value={M.data.oilType} onChange={f("oilType")} opts={["5W-30 Synthetic","10W-40 Semi","15W-40 Mineral","5W-40 Full Syn"]} req/><Inp label="Total Litres" value={M.data.litres} onChange={f("litres")} type="number" req/><Inp label="Cost/Litre (GH₵)" value={M.data.costPerL} onChange={f("costPerL")} type="number"/><Inp label="Supplier" value={M.data.supplier} onChange={f("supplier")}/><Inp label="Note" value={M.data.note} onChange={f("note")}/></Grid>
+      {M.data.litres&&M.data.costPerL&&<div style={{marginBottom:14,padding:"10px 14px",background:"#eef2f8",borderRadius:8,fontSize:13}}>Total: <b style={{color:C.primary}}>{GHC(Number(M.data.litres)*Number(M.data.costPerL))}</b></div>}
+      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
     </Modal>}
-    {confirm&&<Modal title="Delete Oil Record?" onClose={()=>setConfirm(null)}>
-      <p style={{fontSize:13,color:C.muted,marginBottom:20}}>This oil purchase record will be deleted.</p>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn variant="ghost" onClick={()=>setConfirm(null)}>Cancel</Btn>
-        <Btn variant="primary" danger onClick={()=>del(confirm)}>Delete</Btn>
-      </div>
-    </Modal>}
+    {del&&<ConfirmModal msg="Delete this oil purchase record?" onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
   </div>;
 }
 
-// ─── SALARIES PAGE ────────────────────────────────────────────────────────
-function SalariesPage({salaries,setSalaries}){
+/* ── SALARIES ────────────────────────────────────────── */
+function Salaries({salaries,setSalaries}){
   const blank={week:WEEKS[0],driver:"",base:"",bonus:"",deductions:"",status:"Pending"};
-  const [modal,setModal]=useState(null);
-  const [confirm,setConfirm]=useState(null);
-  const openAdd=()=>setModal({mode:"add",data:{...blank}});
-  const openEdit=r=>setModal({mode:"edit",data:{...r,base:String(r.base),bonus:String(r.bonus),deductions:String(r.deductions)}});
-  const save=()=>{
-    const d=modal.data;
-    if(!d.driver||!d.base)return alert("Fill required fields");
-    const total=Number(d.base)+Number(d.bonus||0)-Number(d.deductions||0);
-    const item={...d,base:Number(d.base),bonus:Number(d.bonus||0),deductions:Number(d.deductions||0),total};
-    let next;
-    if(modal.mode==="add") next=[...salaries,{...item,id:uid()}];
-    else next=salaries.map(s=>s.id===modal.data.id?{...item,id:modal.data.id}:s);
-    setSalaries(next);save_("salaries",next);setModal(null);
-  };
-  const del=id=>{const next=salaries.filter(s=>s.id!==id);setSalaries(next);save_("salaries",next);setConfirm(null);};
-  const toggle=id=>{const next=salaries.map(x=>x.id===id?{...x,status:x.status==="Paid"?"Pending":"Paid"}:x);setSalaries(next);save_("salaries",next);};
-  const fld=k=>v=>setModal(m=>({...m,data:{...m.data,[k]:v}}));
+  const [M,setM]=useState(null),[del,setDel]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{const d=M.data;if(!d.driver||!d.base)return alert("Fill required fields");const total=Number(d.base)+Number(d.bonus||0)-Number(d.deductions||0);const item={...d,id:M.mode==="add"?uid():d.id,base:Number(d.base),bonus:Number(d.bonus||0),deductions:Number(d.deductions||0),total};const next=M.mode==="add"?[...salaries,item]:salaries.map(s=>s.id===item.id?item:s);setSalaries(next);saveData("salaries",next);setM(null);};
+  const remove=id=>{const next=salaries.filter(s=>s.id!==id);setSalaries(next);saveData("salaries",next);setDel(null);};
+  const toggle=id=>{const next=salaries.map(x=>x.id===id?{...x,status:x.status==="Paid"?"Pending":"Paid"}:x);setSalaries(next);saveData("salaries",next);};
   const weeks=[...new Set(salaries.map(s=>s.week))];
-  const d=modal?.data;
   return <div style={{padding:24}}>
-    <ST title="Driver Salaries — Weekly" action={<Btn onClick={openAdd}>+ Add Salary</Btn>}/>
-    {weeks.map(wk=>{
-      const rows=salaries.filter(s=>s.week===wk);
-      const total=rows.reduce((a,b)=>a+b.total,0);
-      return <Card key={wk} style={{marginBottom:18}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:14,alignItems:"center"}}>
-          <span style={{fontWeight:700,fontSize:14,color:C.primary}}>{wk}</span>
-          <span style={{fontSize:13,color:C.primary,fontWeight:600}}>Payroll: {GHC(total)}</span>
-        </div>
-        <div style={{overflowX:"auto"}}><table style={{fontSize:13}}><thead><tr>{["Driver","Base","Bonus","Deductions","Total","Status",""].map((h,i)=><th key={i} style={{padding:"8px 12px",background:"#f4f6f9",color:C.muted,fontWeight:600,textAlign:"left",borderBottom:`1px solid ${C.border}`}}>{h}</th>)}</tr></thead>
-        <tbody>{rows.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
-          <td style={{padding:"9px 12px"}}>{r.driver}</td>
-          <td style={{padding:"9px 12px"}}>{GHC(r.base)}</td>
-          <td style={{padding:"9px 12px",color:C.success}}>{GHC(r.bonus)}</td>
-          <td style={{padding:"9px 12px",color:C.danger}}>{GHC(r.deductions)}</td>
-          <td style={{padding:"9px 12px",fontWeight:700}}>{GHC(r.total)}</td>
-          <td style={{padding:"9px 12px"}}><SBadge s={r.status}/></td>
-          <td style={{padding:"9px 12px"}}><div style={{display:"flex",gap:6}}>
-            <Btn small variant={r.status==="Paid"?"outline":"accent"} onClick={()=>toggle(r.id)}>{r.status==="Paid"?"Undo":"✓ Paid"}</Btn>
-            <Btn small variant="outline" onClick={()=>openEdit(r)}>✏️</Btn>
-            <Btn small variant="ghost" danger onClick={()=>setConfirm(r.id)}>🗑️</Btn>
-          </div></td>
-        </tr>)}</tbody></table></div>
-      </Card>;
-    })}
-    {modal&&<Modal title={modal.mode==="add"?"Add Salary":"Edit Salary"} onClose={()=>setModal(null)}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-        <Inp label="Week" value={d.week} onChange={fld("week")} options={WEEKS}/>
-        <Inp label="Driver Name" value={d.driver} onChange={fld("driver")} required/>
-        <Inp label="Base Pay (GH₵)" value={d.base} onChange={fld("base")} type="number" required/>
-        <Inp label="Bonus (GH₵)" value={d.bonus} onChange={fld("bonus")} type="number"/>
-        <Inp label="Deductions (GH₵)" value={d.deductions} onChange={fld("deductions")} type="number"/>
-        <Inp label="Status" value={d.status} onChange={fld("status")} options={["Pending","Paid"]}/>
-      </div>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn variant="ghost" onClick={()=>setModal(null)}>Cancel</Btn>
-        <Btn variant="accent" onClick={save}>Save</Btn>
-      </div>
+    <Row title="Driver Salaries — Weekly" action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Salary</Btn>}/>
+    {weeks.map(wk=>{const rows=salaries.filter(s=>s.week===wk);const tot=rows.reduce((a,b)=>a+b.total,0);return<Card key={wk} style={{marginBottom:18}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:14,alignItems:"center"}}><span style={{fontWeight:700,fontSize:14,color:C.primary}}>{wk}</span><span style={{fontSize:13,color:C.primary,fontWeight:600}}>Payroll: {GHC(tot)}</span></div>
+      <div style={{overflowX:"auto"}}><table><THead cols={["Driver","Base","Bonus","Deductions","Total","Status",""]}/>
+      <tbody>{rows.map((r,i)=><TRow key={i} cells={[r.driver,GHC(r.base),<span style={{color:C.success}}>{GHC(r.bonus)}</span>,<span style={{color:C.danger}}>{GHC(r.deductions)}</span>,<b>{GHC(r.total)}</b>,<span onClick={()=>toggle(r.id)} style={{cursor:"pointer"}}><SBdg s={r.status}/></span>,<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,base:String(r.base),bonus:String(r.bonus),deductions:String(r.deductions)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table></div>
+    </Card>;})}
+    {M&&<Modal title={M.mode==="add"?"Add Salary":"Edit Salary"} onClose={()=>setM(null)}>
+      <Grid><Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS}/><Inp label="Driver" value={M.data.driver} onChange={f("driver")} req/><Inp label="Base Pay (GH₵)" value={M.data.base} onChange={f("base")} type="number" req/><Inp label="Bonus (GH₵)" value={M.data.bonus} onChange={f("bonus")} type="number"/><Inp label="Deductions (GH₵)" value={M.data.deductions} onChange={f("deductions")} type="number"/><Inp label="Status" value={M.data.status} onChange={f("status")} opts={["Pending","Paid"]}/></Grid>
+      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
     </Modal>}
-    {confirm&&<Modal title="Delete Salary Record?" onClose={()=>setConfirm(null)}>
-      <p style={{fontSize:13,color:C.muted,marginBottom:20}}>Delete this salary entry permanently?</p>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn variant="ghost" onClick={()=>setConfirm(null)}>Cancel</Btn>
-        <Btn variant="primary" danger onClick={()=>del(confirm)}>Delete</Btn>
-      </div>
-    </Modal>}
+    {del&&<ConfirmModal msg="Delete this salary record?" onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
   </div>;
 }
 
-// ─── PARTS PAGE ───────────────────────────────────────────────────────────
-function PartsPage({parts,setParts,carIDs}){
+/* ── CAR PARTS ───────────────────────────────────────── */
+function Parts({parts,setParts,carIDs}){
   const blank={week:WEEKS[0],carID:carIDs[0]||"",part:"",supplier:"",qty:"",unitCost:""};
-  const [modal,setModal]=useState(null);
-  const [confirm,setConfirm]=useState(null);
-  const openAdd=()=>setModal({mode:"add",data:{...blank}});
-  const openEdit=r=>setModal({mode:"edit",data:{...r,qty:String(r.qty),unitCost:String(r.unitCost)}});
-  const save=()=>{
-    const d=modal.data;
-    if(!d.part||!d.qty)return alert("Fill required fields");
-    const total=Number(d.qty)*Number(d.unitCost||0);
-    const item={...d,qty:Number(d.qty),unitCost:Number(d.unitCost||0),total};
-    let next;
-    if(modal.mode==="add") next=[...parts,{...item,id:uid()}];
-    else next=parts.map(p=>p.id===modal.data.id?{...item,id:modal.data.id}:p);
-    setParts(next);save_("parts",next);setModal(null);
-  };
-  const del=id=>{const next=parts.filter(p=>p.id!==id);setParts(next);save_("parts",next);setConfirm(null);};
-  const fld=k=>v=>setModal(m=>({...m,data:{...m.data,[k]:v}}));
-  const d=modal?.data;
+  const [M,setM]=useState(null),[del,setDel]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{const d=M.data;if(!d.part||!d.qty)return alert("Fill required fields");const total=Number(d.qty)*Number(d.unitCost||0);const item={...d,id:M.mode==="add"?uid():d.id,qty:Number(d.qty),unitCost:Number(d.unitCost||0),total};const next=M.mode==="add"?[...parts,item]:parts.map(p=>p.id===item.id?item:p);setParts(next);saveData("parts",next);setM(null);};
+  const remove=id=>{const next=parts.filter(p=>p.id!==id);setParts(next);saveData("parts",next);setDel(null);};
   return <div style={{padding:24}}>
-    <ST title="Car Parts — Expenses" action={<Btn onClick={openAdd}>+ Add Parts</Btn>}/>
-    <Card>
-      <div style={{overflowX:"auto"}}><table style={{fontSize:13}}><thead><tr>{["Week","Car","Part","Supplier","Qty","Unit Cost","Total",""].map((h,i)=><th key={i} style={{padding:"8px 12px",background:"#f4f6f9",color:C.muted,fontWeight:600,textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
-      <tbody>{parts.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
-        <td style={{padding:"9px 12px",whiteSpace:"nowrap"}}>{r.week}</td>
-        <td style={{padding:"9px 12px",color:C.primary,fontWeight:600}}>{r.carID}</td>
-        <td style={{padding:"9px 12px"}}>{r.part}</td>
-        <td style={{padding:"9px 12px"}}>{r.supplier||"—"}</td>
-        <td style={{padding:"9px 12px"}}>{r.qty}</td>
-        <td style={{padding:"9px 12px"}}>{GHC(r.unitCost)}</td>
-        <td style={{padding:"9px 12px",color:C.danger,fontWeight:600}}>{GHC(r.total)}</td>
-        <td style={{padding:"9px 12px"}}><div style={{display:"flex",gap:6}}>
-          <Btn small variant="outline" onClick={()=>openEdit(r)}>✏️</Btn>
-          <Btn small variant="ghost" danger onClick={()=>setConfirm(r.id)}>🗑️</Btn>
-        </div></td>
-      </tr>)}</tbody></table></div>
-    </Card>
-    {modal&&<Modal title={modal.mode==="add"?"Add Part":"Edit Part"} onClose={()=>setModal(null)}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-        <Inp label="Week" value={d.week} onChange={fld("week")} options={WEEKS}/>
-        <Inp label="Car ID" value={d.carID} onChange={fld("carID")} options={carIDs}/>
-        <Inp label="Part Name" value={d.part} onChange={fld("part")} required/>
-        <Inp label="Supplier" value={d.supplier} onChange={fld("supplier")}/>
-        <Inp label="Qty" value={d.qty} onChange={fld("qty")} type="number" required/>
-        <Inp label="Unit Cost (GH₵)" value={d.unitCost} onChange={fld("unitCost")} type="number"/>
-      </div>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn variant="ghost" onClick={()=>setModal(null)}>Cancel</Btn>
-        <Btn variant="accent" onClick={save}>Save</Btn>
-      </div>
+    <Row title="Car Parts — Expenses" action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Parts</Btn>}/>
+    <Card><div style={{overflowX:"auto"}}><table><THead cols={["Week","Car","Part","Supplier","Qty","Unit Cost","Total",""]}/>
+    <tbody>{parts.map((r,i)=><TRow key={i} cells={[r.week,<b style={{color:C.primary}}>{r.carID}</b>,r.part,r.supplier||"—",r.qty,GHC(r.unitCost),<span style={{color:C.danger,fontWeight:600}}>{GHC(r.total)}</span>,<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,qty:String(r.qty),unitCost:String(r.unitCost)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table></div></Card>
+    {M&&<Modal title={M.mode==="add"?"Add Part":"Edit Part"} onClose={()=>setM(null)}>
+      <Grid><Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS}/><Inp label="Car ID" value={M.data.carID} onChange={f("carID")} opts={carIDs}/><Inp label="Part Name" value={M.data.part} onChange={f("part")} req/><Inp label="Supplier" value={M.data.supplier} onChange={f("supplier")}/><Inp label="Qty" value={M.data.qty} onChange={f("qty")} type="number" req/><Inp label="Unit Cost (GH₵)" value={M.data.unitCost} onChange={f("unitCost")} type="number"/></Grid>
+      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
     </Modal>}
-    {confirm&&<Modal title="Delete Part?" onClose={()=>setConfirm(null)}>
-      <p style={{fontSize:13,color:C.muted,marginBottom:20}}>Delete this parts record?</p>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn variant="ghost" onClick={()=>setConfirm(null)}>Cancel</Btn>
-        <Btn variant="primary" danger onClick={()=>del(confirm)}>Delete</Btn>
-      </div>
-    </Modal>}
+    {del&&<ConfirmModal msg="Delete this parts record?" onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
   </div>;
 }
 
-// ─── INSURANCE PAGE ───────────────────────────────────────────────────────
-function InsurancePage({insurance,setInsurance,cars}){
+/* ── INSURANCE ───────────────────────────────────────── */
+function Insurance({insurance,setInsurance,cars}){
   const carIDs=cars.map(c=>c.id);
   const blank={carID:carIDs[0]||"",insurer:"",policyNo:"",issueDate:"",expiryDate:"",premium:"",type:"Comprehensive"};
-  const [modal,setModal]=useState(null);
-  const [confirm,setConfirm]=useState(null);
-  const openAdd=()=>setModal({mode:"add",data:{...blank}});
-  const openEdit=r=>setModal({mode:"edit",data:{...r,premium:String(r.premium)}});
-  const save=()=>{
-    const d=modal.data;
-    if(!d.insurer||!d.expiryDate)return alert("Fill required fields");
-    const plate=cars.find(c=>c.id===d.carID)?.plate||"";
-    const item={...d,plate,premium:Number(d.premium||0)};
-    let next;
-    if(modal.mode==="add") next=[...insurance,{...item,id:uid()}];
-    else next=insurance.map(x=>x.id===modal.data.id?{...item,id:modal.data.id}:x);
-    setInsurance(next);save_("insurance",next);setModal(null);
-  };
-  const del=id=>{const next=insurance.filter(x=>x.id!==id);setInsurance(next);save_("insurance",next);setConfirm(null);};
-  const fld=k=>v=>setModal(m=>({...m,data:{...m.data,[k]:v}}));
-  const records=insurance.map(r=>({...r,status:getInsStatus(r.expiryDate)}));
-  const expired=records.filter(r=>r.status==="Expired").length;
-  const soon=records.filter(r=>r.status==="Expiring Soon").length;
-  const d=modal?.data;
+  const [M,setM]=useState(null),[del,setDel]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{const d=M.data;if(!d.insurer||!d.expiryDate)return alert("Fill required fields");const plate=cars.find(c=>c.id===d.carID)?.plate||"";const item={...d,id:M.mode==="add"?uid():d.id,plate,premium:Number(d.premium||0)};const next=M.mode==="add"?[...insurance,item]:insurance.map(x=>x.id===item.id?item:x);setInsurance(next);saveData("insurance",next);setM(null);};
+  const remove=id=>{const next=insurance.filter(x=>x.id!==id);setInsurance(next);saveData("insurance",next);setDel(null);};
+  const recs=insurance.map(r=>({...r,status:getInsStatus(r.expiryDate)}));
+  const expired=recs.filter(r=>r.status==="Expired").length,soon=recs.filter(r=>r.status==="Expiring Soon").length;
   return <div style={{padding:24}}>
-    <ST title="Vehicle Insurance Registry" action={<Btn onClick={openAdd}>+ Add Insurance</Btn>}/>
+    <Row title="Vehicle Insurance Registry" action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Insurance</Btn>}/>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:14,marginBottom:20}}>
-      <MC label="Total Vehicles" value={records.length} sub="Registered"/>
-      <MC label="Active" value={records.filter(r=>r.status==="Active").length} sub="Valid" color={C.successBg}/>
-      <MC label="Expiring Soon" value={soon} sub="≤30 days" color={soon>0?C.warnBg:"#f4f6f9"}/>
-      <MC label="Expired" value={expired} sub="Renew now" color={expired>0?C.dangerBg:"#f4f6f9"}/>
+      <Metric label="Total Vehicles" value={recs.length} sub="Registered"/><Metric label="Active" value={recs.filter(r=>r.status==="Active").length} sub="Valid" color={C.sBg}/><Metric label="Expiring Soon" value={soon} sub="≤30 days" color={soon>0?C.wBg:"#f4f6f9"}/><Metric label="Expired" value={expired} sub="Renew now" color={expired>0?C.dBg:"#f4f6f9"}/>
     </div>
-    {(expired>0||soon>0)&&<div style={{background:C.warnBg,border:`1px solid ${C.warnBorder}`,borderRadius:8,padding:"10px 16px",marginBottom:18,fontSize:13,color:C.warnText}}>
-      ⚠️ {expired>0&&<><strong>{expired} vehicle{expired!==1?"s":""}</strong> ha{expired===1?"s":"ve"} expired insurance. </>}
-      {soon>0&&<><strong>{soon} vehicle{soon!==1?"s":""}</strong> expir{soon===1?"es":"e"} within 30 days.</>} Please arrange renewal.
-    </div>}
-    <Card>
-      <div style={{overflowX:"auto"}}><table style={{fontSize:13}}><thead><tr>{["Car","Plate","Insurer","Policy No.","Type","Issued","Expires","Premium","Status",""].map((h,i)=><th key={i} style={{padding:"8px 12px",background:"#f4f6f9",color:C.muted,fontWeight:600,textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
-      <tbody>{records.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
-        <td style={{padding:"9px 12px",fontWeight:600,color:C.primary}}>{r.carID}</td>
-        <td style={{padding:"9px 12px"}}>{r.plate}</td>
-        <td style={{padding:"9px 12px"}}>{r.insurer}</td>
-        <td style={{padding:"9px 12px",fontFamily:"monospace",fontSize:11}}>{r.policyNo||"—"}</td>
-        <td style={{padding:"9px 12px",fontSize:12}}>{r.type}</td>
-        <td style={{padding:"9px 12px"}}>{r.issueDate||"—"}</td>
-        <td style={{padding:"9px 12px",fontWeight:600,color:r.status==="Expired"?C.danger:r.status==="Expiring Soon"?C.warnText:C.text}}>{r.expiryDate}</td>
-        <td style={{padding:"9px 12px",color:C.info,fontWeight:600}}>{GHC(r.premium)}</td>
-        <td style={{padding:"9px 12px"}}><SBadge s={r.status}/></td>
-        <td style={{padding:"9px 12px"}}><div style={{display:"flex",gap:6}}>
-          <Btn small variant="outline" onClick={()=>openEdit(r)}>✏️</Btn>
-          <Btn small variant="ghost" danger onClick={()=>setConfirm(r.id)}>🗑️</Btn>
-        </div></td>
-      </tr>)}</tbody></table></div>
-    </Card>
-    {modal&&<Modal title={modal.mode==="add"?"Add Insurance":"Edit Insurance"} onClose={()=>setModal(null)}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-        <Inp label="Car ID" value={d.carID} onChange={fld("carID")} options={carIDs} required/>
-        <Inp label="Insurer" value={d.insurer} onChange={fld("insurer")} required/>
-        <Inp label="Policy Number" value={d.policyNo} onChange={fld("policyNo")}/>
-        <Inp label="Cover Type" value={d.type} onChange={fld("type")} options={["Comprehensive","Third Party","Third Party Fire & Theft"]}/>
-        <Inp label="Issue Date" value={d.issueDate} onChange={fld("issueDate")} type="date"/>
-        <Inp label="Expiry Date" value={d.expiryDate} onChange={fld("expiryDate")} type="date" required/>
-        <Inp label="Premium (GH₵)" value={d.premium} onChange={fld("premium")} type="number"/>
-      </div>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn variant="ghost" onClick={()=>setModal(null)}>Cancel</Btn>
-        <Btn variant="accent" onClick={save}>Save</Btn>
-      </div>
+    {(expired>0||soon>0)&&<div style={{background:C.wBg,border:`1px solid ${C.wBd}`,borderRadius:8,padding:"10px 16px",marginBottom:18,fontSize:13,color:C.wTx}}>⚠️ {expired>0&&<><b>{expired} vehicle{expired!==1?"s":""}</b> ha{expired===1?"s":"ve"} expired insurance. </>}{soon>0&&<><b>{soon}</b> expiring within 30 days.</>} Please arrange renewal.</div>}
+    <Card><div style={{overflowX:"auto"}}><table><THead cols={["Car","Plate","Insurer","Policy No.","Type","Issued","Expires","Premium","Status",""]}/>
+    <tbody>{recs.map((r,i)=><TRow key={i} cells={[<b style={{color:C.primary}}>{r.carID}</b>,r.plate,r.insurer,<span style={{fontFamily:"monospace",fontSize:11}}>{r.policyNo||"—"}</span>,<span style={{fontSize:12}}>{r.type}</span>,r.issueDate||"—",<span style={{fontWeight:600,color:r.status==="Expired"?C.danger:r.status==="Expiring Soon"?C.wTx:C.text}}>{r.expiryDate}</span>,<span style={{color:C.info,fontWeight:600}}>{GHC(r.premium)}</span>,<SBdg s={r.status}/>,<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,premium:String(r.premium)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table></div></Card>
+    {M&&<Modal title={M.mode==="add"?"Add Insurance":"Edit Insurance"} onClose={()=>setM(null)}>
+      <Grid><Inp label="Car ID" value={M.data.carID} onChange={f("carID")} opts={carIDs} req/><Inp label="Insurer" value={M.data.insurer} onChange={f("insurer")} req/><Inp label="Policy No." value={M.data.policyNo} onChange={f("policyNo")}/><Inp label="Cover Type" value={M.data.type} onChange={f("type")} opts={["Comprehensive","Third Party","Third Party Fire & Theft"]}/><Inp label="Issue Date" value={M.data.issueDate} onChange={f("issueDate")} type="date"/><Inp label="Expiry Date" value={M.data.expiryDate} onChange={f("expiryDate")} type="date" req/><Inp label="Premium (GH₵)" value={M.data.premium} onChange={f("premium")} type="number"/></Grid>
+      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
     </Modal>}
-    {confirm&&<Modal title="Delete Insurance Record?" onClose={()=>setConfirm(null)}>
-      <p style={{fontSize:13,color:C.muted,marginBottom:20}}>Delete this insurance record permanently?</p>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn variant="ghost" onClick={()=>setConfirm(null)}>Cancel</Btn>
-        <Btn variant="primary" danger onClick={()=>del(confirm)}>Delete</Btn>
-      </div>
-    </Modal>}
+    {del&&<ConfirmModal msg="Delete this insurance record?" onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
   </div>;
 }
 
-// ─── LOG PAGE ─────────────────────────────────────────────────────────────
-function LogPage({logs,setLogs,carIDs}){
+/* ── ISSUE LOG ───────────────────────────────────────── */
+function IssueLog({logs,setLogs,carIDs}){
   const blank={date:"",carID:carIDs[0]||"",driver:"",type:"Accident",severity:"Low",desc:"",status:"Open"};
-  const [modal,setModal]=useState(null);
-  const [confirm,setConfirm]=useState(null);
-  const [detail,setDetail]=useState(null);
-  const openAdd=()=>setModal({mode:"add",data:{...blank}});
-  const openEdit=r=>setModal({mode:"edit",data:{...r}});
-  const save=()=>{
-    const d=modal.data;
-    if(!d.date||!d.desc)return alert("Fill required fields");
-    let next;
-    if(modal.mode==="add") next=[...logs,{...d,id:uid()}];
-    else next=logs.map(l=>l.id===modal.data.id?{...d,id:modal.data.id}:l);
-    setLogs(next);save_("logs",next);setModal(null);
-  };
-  const del=id=>{const next=logs.filter(l=>l.id!==id);setLogs(next);save_("logs",next);setConfirm(null);if(detail?.id===id)setDetail(null);};
-  const fld=k=>v=>setModal(m=>({...m,data:{...m.data,[k]:v}}));
-  const sevColor={Low:[C.success,"#e6f4ec"],Moderate:[C.accent,C.warnBg],High:[C.danger,C.dangerBg]};
-  const d=modal?.data;
+  const [M,setM]=useState(null),[del,setDel]=useState(null),[detail,setDetail]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{const d=M.data;if(!d.date||!d.desc)return alert("Fill required fields");const item={...d,id:M.mode==="add"?uid():d.id};const next=M.mode==="add"?[...logs,item]:logs.map(l=>l.id===item.id?item:l);setLogs(next);saveData("logs",next);setM(null);};
+  const remove=id=>{const next=logs.filter(l=>l.id!==id);setLogs(next);saveData("logs",next);setDel(null);if(detail?.id===id)setDetail(null);};
+  const sevC={Low:[C.success,"#e6f4ec"],Moderate:[C.accent,C.wBg],High:[C.danger,C.dBg]};
   return <div style={{padding:24}}>
-    <ST title="Issue Log — Accidents, Claims & Incidents" action={<Btn onClick={openAdd}>+ Report Issue</Btn>}/>
+    <Row title="Issue Log — Accidents, Claims & Incidents" action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Report Issue</Btn>}/>
     {detail&&<Card style={{marginBottom:20,background:"#fdf9f3",border:`1.5px solid ${C.accent}`}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
-        <span style={{fontWeight:700,fontSize:15,color:C.primary}}>{detail.type} — {detail.carID}</span>
-        <Btn small variant="ghost" onClick={()=>setDetail(null)}>✕ Close</Btn>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:12,fontSize:13}}>
-        <div><span style={{color:C.muted}}>Date: </span><strong>{detail.date}</strong></div>
-        <div><span style={{color:C.muted}}>Driver: </span><strong>{detail.driver||"N/A"}</strong></div>
-        <div><span style={{color:C.muted}}>Status: </span><SBadge s={detail.status}/></div>
-      </div>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={{fontWeight:700,fontSize:15,color:C.primary}}>{detail.type} — {detail.carID}</span><Btn sm v="ghost" onClick={()=>setDetail(null)}>✕ Close</Btn></div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:12,fontSize:13}}><div><span style={{color:C.muted}}>Date: </span><b>{detail.date}</b></div><div><span style={{color:C.muted}}>Driver: </span><b>{detail.driver||"N/A"}</b></div><div><SBdg s={detail.status}/></div></div>
       <div style={{fontSize:13,background:"#fff",padding:"10px 14px",borderRadius:8,border:`1px solid ${C.border}`}}>{detail.desc}</div>
     </Card>}
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      {logs.map(l=>{
-        const [sc,sbg]=sevColor[l.severity]||[C.muted,"#f0f2f5"];
-        return <Card key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16}}>
-          <div style={{flex:1}}>
-            <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6,flexWrap:"wrap"}}>
-              <span style={{fontWeight:700,color:C.primary,fontSize:14}}>{l.type}</span>
-              <Badge label={l.severity} color={sc} bg={sbg} border={sc+"66"}/>
-              <SBadge s={l.status}/>
-              <span style={{fontSize:12,color:C.muted}}>• {l.date}</span>
-            </div>
-            <div style={{fontSize:13,color:C.muted,marginBottom:4}}><strong style={{color:C.text}}>{l.carID}</strong> — {l.driver||"N/A"}</div>
-            <div style={{fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:460}}>{l.desc}</div>
-          </div>
-          <div style={{display:"flex",gap:6,flexShrink:0}}>
-            <Btn small variant="outline" onClick={()=>setDetail(detail?.id===l.id?null:l)}>View</Btn>
-            <Btn small variant="outline" onClick={()=>openEdit(l)}>✏️</Btn>
-            <Btn small variant="ghost" danger onClick={()=>setConfirm(l.id)}>🗑️</Btn>
-          </div>
-        </Card>;
-      })}
+      {logs.map(l=>{const[sc,sbg]=sevC[l.severity]||[C.muted,"#f0f2f5"];return<Card key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16}}>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6,flexWrap:"wrap"}}><span style={{fontWeight:700,color:C.primary,fontSize:14}}>{l.type}</span><Bdg label={l.severity} color={sc} bg={sbg} border={sc+"66"}/><SBdg s={l.status}/><span style={{fontSize:12,color:C.muted}}>• {l.date}</span></div>
+          <div style={{fontSize:13,color:C.muted,marginBottom:4}}><b style={{color:C.text}}>{l.carID}</b> — {l.driver||"N/A"}</div>
+          <div style={{fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:460}}>{l.desc}</div>
+        </div>
+        <div style={{display:"flex",gap:6,flexShrink:0}}>
+          <Btn sm v="outline" onClick={()=>setDetail(detail?.id===l.id?null:l)}>View</Btn>
+          <Btn sm v="outline" onClick={()=>setM({mode:"edit",data:{...l}})}>✏️</Btn>
+          <Btn sm v="ghost" danger onClick={()=>setDel(l.id)}>🗑️</Btn>
+        </div>
+      </Card>;})}
     </div>
-    {modal&&<Modal title={modal.mode==="add"?"Report New Issue":"Edit Issue"} onClose={()=>setModal(null)}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
-        <Inp label="Date" value={d.date} onChange={fld("date")} type="date" required/>
-        <Inp label="Car ID" value={d.carID} onChange={fld("carID")} options={carIDs}/>
-        <Inp label="Driver" value={d.driver} onChange={fld("driver")}/>
-        <Inp label="Type" value={d.type} onChange={fld("type")} options={["Accident","Insurance Claim","Breakdown","Traffic Offence","Vehicle Theft","Other"]}/>
-        <Inp label="Severity" value={d.severity} onChange={fld("severity")} options={["Low","Moderate","High"]}/>
-        <Inp label="Status" value={d.status} onChange={fld("status")} options={["Open","In Review","Resolved"]}/>
-      </div>
+    {M&&<Modal title={M.mode==="add"?"Report Issue":"Edit Issue"} onClose={()=>setM(null)}>
+      <Grid><Inp label="Date" value={M.data.date} onChange={f("date")} type="date" req/><Inp label="Car ID" value={M.data.carID} onChange={f("carID")} opts={carIDs}/><Inp label="Driver" value={M.data.driver} onChange={f("driver")}/><Inp label="Type" value={M.data.type} onChange={f("type")} opts={["Accident","Insurance Claim","Breakdown","Traffic Offence","Vehicle Theft","Other"]}/><Inp label="Severity" value={M.data.severity} onChange={f("severity")} opts={["Low","Moderate","High"]}/><Inp label="Status" value={M.data.status} onChange={f("status")} opts={["Open","In Review","Resolved"]}/></Grid>
       <div style={{marginBottom:16}}>
         <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Description <span style={{color:C.danger}}>*</span></label>
-        <textarea value={d.desc} onChange={e=>fld("desc")(e.target.value)} rows={3} style={{display:"block",width:"100%",marginTop:4,padding:"7px 10px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:13,resize:"vertical",boxSizing:"border-box"}}/>
+        <textarea value={M.data.desc} onChange={e=>f("desc")(e.target.value)} rows={3} style={{display:"block",width:"100%",marginTop:4,padding:"7px 10px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:13,resize:"vertical",boxSizing:"border-box"}}/>
       </div>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn variant="ghost" onClick={()=>setModal(null)}>Cancel</Btn>
-        <Btn variant="accent" onClick={save}>Save</Btn>
-      </div>
+      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
     </Modal>}
-    {confirm&&<Modal title="Delete Issue?" onClose={()=>setConfirm(null)}>
-      <p style={{fontSize:13,color:C.muted,marginBottom:20}}>Delete this incident report permanently?</p>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <Btn variant="ghost" onClick={()=>setConfirm(null)}>Cancel</Btn>
-        <Btn variant="primary" danger onClick={()=>del(confirm)}>Delete</Btn>
-      </div>
-    </Modal>}
+    {del&&<ConfirmModal msg="Delete this incident report?" onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
   </div>;
 }
 
-// ─── SETTINGS PAGE ────────────────────────────────────────────────────────
-const DEFAULT_SETTINGS = {
-  companyName:"BYT Transport",
-  logoText:"BYT",
-  tagline:"Admin Management System",
-  address:"Kasoa, Ghana",
-  phone:"0557086481",
-  email:"",
-  primaryColor:"#1a3a5c",
-  accentColor:"#e8a020",
-  logoImage:"",
-  loginBgImage:"",
-  appBgImage:"",
-  adminUsername:"admin",
-  adminPassword:"byt2024",
-};
-
-function SettingsPage({settings,onSave}){
-  const [form,setForm]=useState({...settings});
-  const [saved,setSaved]=useState(false);
-  const [tab,setTab]=useState("branding");
-  const fld=k=>v=>setForm(f=>({...f,[k]:v}));
-
-  const handleImgUpload=(field,maxKB=500)=>e=>{
-    const file=e.target.files[0];
-    if(!file)return;
-    if(file.size>maxKB*1024){alert(`Image too large. Please use an image under ${maxKB}KB.`);return;}
-    const reader=new FileReader();
-    reader.onload=ev=>setForm(f=>({...f,[field]:ev.target.result}));
-    reader.readAsDataURL(file);
-  };
-
-  const handleLogoUpload=handleImgUpload("logoImage",200);
-  const removeLogo=()=>setForm(f=>({...f,logoImage:""}));
-  const removeLoginBg=()=>setForm(f=>({...f,loginBgImage:""}));
-  const removeAppBg=()=>setForm(f=>({...f,appBgImage:""}));
-
-  const save=()=>{
-    if(!form.companyName)return alert("Company name is required");
-    if(!form.adminUsername||!form.adminPassword)return alert("Username and password are required");
-    onSave(form);
-    setSaved(true);
-    setTimeout(()=>setSaved(false),3000);
-  };
-
-  const reset=()=>{if(window.confirm("Reset all settings to defaults?"))setForm({...DEFAULT_SETTINGS});};
-
-  const tabs=[
-    {id:"branding",label:"🎨 Branding & Logo"},
-    {id:"backgrounds",label:"🖼️ Backgrounds"},
-    {id:"contact",label:"📍 Contact Info"},
-    {id:"security",label:"🔐 Login & Security"},
-  ];
-
-  return <div style={{padding:24,maxWidth:700}}>
-    <div style={{marginBottom:24}}>
-      <h1 style={{fontSize:20,fontWeight:700,color:C.primary,margin:0}}>App Settings</h1>
-      <p style={{margin:"6px 0 0",fontSize:13,color:C.muted}}>Customise your company branding, contact details, and login credentials. All changes are saved locally on this device.</p>
-    </div>
-
-    {/* Tab bar */}
-    <div style={{display:"flex",gap:4,marginBottom:20,borderBottom:`1px solid ${C.border}`,paddingBottom:0}}>
-      {tabs.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{
-        padding:"9px 16px",fontSize:13,fontWeight:tab===t.id?700:400,
-        background:"none",border:"none",cursor:"pointer",
-        color:tab===t.id?C.primary:C.muted,
-        borderBottom:tab===t.id?`2px solid ${C.primary}`:"2px solid transparent",
-        marginBottom:-1}}>
-        {t.label}
-      </button>)}
-    </div>
-
-    {/* BRANDING TAB */}
-    {tab==="branding"&&<Card>
-      <h3 style={{fontSize:14,fontWeight:700,color:C.primary,marginBottom:16}}>Company Branding</h3>
-
-      {/* Logo preview */}
-      <div style={{marginBottom:20,padding:16,background:"#f4f6f9",borderRadius:10,display:"flex",alignItems:"center",gap:16}}>
-        <div style={{width:52,height:52,borderRadius:11,background:form.accentColor,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
-          {form.logoImage
-            ?<img src={form.logoImage} alt="logo" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-            :<span style={{fontWeight:800,fontSize:15,color:"#fff"}}>{form.logoText||"?"}</span>}
-        </div>
-        <div>
-          <div style={{fontWeight:700,fontSize:16,color:form.primaryColor}}>{form.companyName||"Company Name"}</div>
-          <div style={{fontSize:11,color:C.muted}}>{form.tagline||"Tagline"}</div>
-          <div style={{fontSize:11,color:C.muted,marginTop:2}}>📍 {form.address} &nbsp;•&nbsp; 📞 {form.phone}</div>
-        </div>
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
-        <Inp label="Company Name" value={form.companyName} onChange={fld("companyName")} required/>
-        <Inp label="Logo Letters (shown if no image)" value={form.logoText} onChange={fld("logoText")}/>
-        <div style={{gridColumn:"1/-1"}}><Inp label="App Tagline / Subtitle" value={form.tagline} onChange={fld("tagline")}/></div>
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
-        <div style={{display:"flex",flexDirection:"column",gap:4}}>
-          <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Primary Colour (header & sidebar)</label>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <input type="color" value={form.primaryColor} onChange={e=>fld("primaryColor")(e.target.value)} style={{width:40,height:36,borderRadius:6,border:`1px solid ${C.border}`,cursor:"pointer",padding:2}}/>
-            <span style={{fontSize:12,color:C.muted,fontFamily:"monospace"}}>{form.primaryColor}</span>
-          </div>
-        </div>
-        <div style={{display:"flex",flexDirection:"column",gap:4}}>
-          <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Accent Colour (logo box & buttons)</label>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <input type="color" value={form.accentColor} onChange={e=>fld("accentColor")(e.target.value)} style={{width:40,height:36,borderRadius:6,border:`1px solid ${C.border}`,cursor:"pointer",padding:2}}/>
-            <span style={{fontSize:12,color:C.muted,fontFamily:"monospace"}}>{form.accentColor}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Logo image upload */}
-      <div style={{display:"flex",flexDirection:"column",gap:6}}>
-        <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Upload Logo Image (PNG/JPG, max 200KB)</label>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <label style={{background:C.primary,color:"#fff",borderRadius:7,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
-            📁 Choose Image
-            <input type="file" accept="image/*" onChange={handleLogoUpload} style={{display:"none"}}/>
-          </label>
-          {form.logoImage&&<button onClick={removeLogo} style={{background:"none",border:`1px solid ${C.danger}`,color:C.danger,borderRadius:7,padding:"6px 12px",fontSize:12,cursor:"pointer",fontWeight:600}}>✕ Remove Image</button>}
-          {form.logoImage&&<span style={{fontSize:12,color:C.success}}>✓ Image loaded</span>}
-        </div>
-        <p style={{fontSize:11,color:C.muted,margin:0}}>If no image is uploaded, the Logo Letters text above will be shown instead.</p>
-      </div>
-    </Card>}
-
-    {/* BACKGROUNDS TAB */}
-    {tab==="backgrounds"&&<div style={{display:"flex",flexDirection:"column",gap:18}}>
-
-      {/* Login Screen Background */}
-      <Card>
-        <h3 style={{fontSize:14,fontWeight:700,color:C.primary,marginBottom:6}}>Login Screen Background</h3>
-        <p style={{fontSize:12,color:C.muted,marginBottom:14}}>This image appears behind the login card when you open the app. Best size: 1920×1080px or larger.</p>
-        <div style={{display:"flex",gap:14,alignItems:"flex-start",flexWrap:"wrap"}}>
-          {/* Preview */}
-          <div style={{width:220,height:130,borderRadius:10,overflow:"hidden",border:`2px solid ${C.border}`,flexShrink:0,position:"relative",background:form.loginBgImage?`url(${form.loginBgImage}) center/cover`:`linear-gradient(135deg,${form.primaryColor},#2a5a8c)`}}>
-            <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <div style={{background:"rgba(255,255,255,0.92)",borderRadius:8,padding:"10px 16px",textAlign:"center",fontSize:11}}>
-                <div style={{width:22,height:22,borderRadius:5,background:form.accentColor,margin:"0 auto 6px",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:9}}>{form.logoText||"BYT"}</div>
-                <div style={{fontWeight:700,color:form.primaryColor,fontSize:10}}>{form.companyName}</div>
-                <div style={{color:C.muted,fontSize:9,marginTop:2}}>Login preview</div>
-              </div>
-            </div>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            <label style={{background:C.primary,color:"#fff",borderRadius:7,padding:"8px 16px",fontSize:13,fontWeight:600,cursor:"pointer",display:"inline-block"}}>
-              📁 Upload Login Background
-              <input type="file" accept="image/*" onChange={handleImgUpload("loginBgImage",1500)} style={{display:"none"}}/>
-            </label>
-            {form.loginBgImage
-              ?<><div style={{fontSize:12,color:C.success,fontWeight:600}}>✓ Background image loaded</div>
-                <button onClick={removeLoginBg} style={{background:"none",border:`1px solid ${C.danger}`,color:C.danger,borderRadius:7,padding:"6px 14px",fontSize:12,cursor:"pointer",fontWeight:600,width:"fit-content"}}>✕ Remove Image</button></>
-              :<div style={{fontSize:12,color:C.muted}}>No image set — using colour gradient</div>}
-            <div style={{fontSize:11,color:C.muted,maxWidth:280}}>PNG, JPG, or WEBP. Max 1.5MB. The gradient colour is used if no image is set.</div>
-          </div>
-        </div>
-      </Card>
-
-      {/* App Background */}
-      <Card>
-        <h3 style={{fontSize:14,fontWeight:700,color:C.primary,marginBottom:6}}>App Background</h3>
-        <p style={{fontSize:12,color:C.muted,marginBottom:14}}>This image appears in the main content area behind all pages. Use a subtle or low-contrast image for best readability.</p>
-        <div style={{display:"flex",gap:14,alignItems:"flex-start",flexWrap:"wrap"}}>
-          {/* Preview */}
-          <div style={{width:220,height:130,borderRadius:10,overflow:"hidden",border:`2px solid ${C.border}`,flexShrink:0,position:"relative",background:form.appBgImage?`url(${form.appBgImage}) center/cover`:"#f4f6f9"}}>
-            {/* Fake sidebar + content */}
-            <div style={{position:"absolute",inset:0,display:"flex"}}>
-              <div style={{width:50,background:"rgba(255,255,255,0.9)",borderRight:`1px solid ${C.border}`}}/>
-              <div style={{flex:1,padding:8}}>
-                <div style={{background:"rgba(255,255,255,0.88)",borderRadius:5,padding:6,marginBottom:6,fontSize:9,color:C.primary,fontWeight:600}}>Dashboard</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
-                  {[0,1,2,3].map(i=><div key={i} style={{background:"rgba(255,255,255,0.82)",borderRadius:4,height:24}}/>)}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            <label style={{background:C.primary,color:"#fff",borderRadius:7,padding:"8px 16px",fontSize:13,fontWeight:600,cursor:"pointer",display:"inline-block"}}>
-              📁 Upload App Background
-              <input type="file" accept="image/*" onChange={handleImgUpload("appBgImage",1500)} style={{display:"none"}}/>
-            </label>
-            {form.appBgImage
-              ?<><div style={{fontSize:12,color:C.success,fontWeight:600}}>✓ Background image loaded</div>
-                <button onClick={removeAppBg} style={{background:"none",border:`1px solid ${C.danger}`,color:C.danger,borderRadius:7,padding:"6px 14px",fontSize:12,cursor:"pointer",fontWeight:600,width:"fit-content"}}>✕ Remove Image</button></>
-              :<div style={{fontSize:12,color:C.muted}}>No image set — using plain grey background</div>}
-            <div style={{fontSize:11,color:C.muted,maxWidth:280}}>Tip: use a faint texture or pattern. Busy photos can make text hard to read.</div>
-          </div>
-        </div>
-      </Card>
-    </div>}
-
-    {/* CONTACT TAB */}
-    {tab==="contact"&&<Card>
-      <h3 style={{fontSize:14,fontWeight:700,color:C.primary,marginBottom:16}}>Contact Information</h3>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-        <div style={{gridColumn:"1/-1"}}><Inp label="Address / Location" value={form.address} onChange={fld("address")}/></div>
-        <Inp label="Phone Number" value={form.phone} onChange={fld("phone")}/>
-        <Inp label="Email Address (optional)" value={form.email} onChange={fld("email")} type="email"/>
-      </div>
-      <div style={{marginTop:14,padding:12,background:"#f4f6f9",borderRadius:8,fontSize:12,color:C.muted}}>
-        These details appear in the app header and on the login screen.
-      </div>
-    </Card>}
-
-    {/* SECURITY TAB */}
-    {tab==="security"&&<Card>
-      <h3 style={{fontSize:14,fontWeight:700,color:C.primary,marginBottom:6}}>Login Credentials</h3>
-      <p style={{fontSize:13,color:C.muted,marginBottom:16}}>Change the username and password used to access this app. You will be logged out after saving and must log in with the new credentials.</p>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-        <Inp label="Admin Username" value={form.adminUsername} onChange={fld("adminUsername")} required/>
-        <Inp label="Admin Password" value={form.adminPassword} onChange={fld("adminPassword")} type="password" required/>
-      </div>
-      <div style={{marginTop:14,padding:12,background:C.warnBg,border:`1px solid ${C.warnBorder}`,borderRadius:8,fontSize:12,color:C.warnText}}>
-        ⚠️ After saving a new password, write it down somewhere safe. If you forget it, you will need to clear your browser data to reset.
-      </div>
-    </Card>}
-
-    {/* Save bar */}
-    <div style={{display:"flex",gap:10,alignItems:"center",marginTop:20}}>
-      <button onClick={save} style={{background:C.primary,color:"#fff",border:"none",borderRadius:8,padding:"10px 24px",fontSize:14,fontWeight:700,cursor:"pointer"}}>💾 Save Changes</button>
-      <button onClick={reset} style={{background:"#fff",color:C.muted,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 16px",fontSize:13,cursor:"pointer"}}>Reset to Defaults</button>
-      {saved&&<span style={{fontSize:13,color:C.success,fontWeight:600}}>✓ Settings saved successfully!</span>}
-    </div>
-  </div>;
-}
-
-// ─── MAIN APP ─────────────────────────────────────────────────────────────
+/* ── MAIN APP ────────────────────────────────────────── */
 function App(){
-  const [settings,setSettings]=useState(()=>({...DEFAULT_SETTINGS,...(LS.get("settings")||{})}));
+  const [S,setS]=useState(loadSettings);
   const [authed,setAuthed]=useState(()=>LS.get("auth")===true);
   const [page,setPage]=useState("dashboard");
   const [sideOpen,setSideOpen]=useState(true);
-  const [cars,setCars]=useState(()=>load("cars"));
-  const [sales,setSales]=useState(()=>load("sales"));
-  const [expenses,setExpenses]=useState(()=>load("expenses"));
-  const [payments,setPayments]=useState(()=>load("payments"));
-  const [oil,setOil]=useState(()=>load("oil"));
-  const [salaries,setSalaries]=useState(()=>load("salaries"));
-  const [parts,setParts]=useState(()=>load("parts"));
-  const [insurance,setInsurance]=useState(()=>load("insurance"));
-  const [logs,setLogs]=useState(()=>load("logs"));
+  const [cars,setCars]=useState(()=>init("cars"));
+  const [sales,setSales]=useState(()=>init("sales"));
+  const [expenses,setExpenses]=useState(()=>init("expenses"));
+  const [payments,setPayments]=useState(()=>init("payments"));
+  const [oil,setOil]=useState(()=>init("oil"));
+  const [salaries,setSalaries]=useState(()=>init("salaries"));
+  const [parts,setParts]=useState(()=>init("parts"));
+  const [insurance,setInsurance]=useState(()=>init("insurance"));
+  const [logs,setLogs]=useState(()=>init("logs"));
   const [installPrompt,setInstallPrompt]=useState(null);
   const [installDismissed,setInstallDismissed]=useState(false);
 
   useEffect(()=>{
-    const handler=e=>{e.preventDefault();setInstallPrompt(e);};
-    window.addEventListener('beforeinstallprompt',handler);
-    return()=>window.removeEventListener('beforeinstallprompt',handler);
+    const h=e=>{e.preventDefault();setInstallPrompt(e);};
+    window.addEventListener('beforeinstallprompt',h);
+    return()=>window.removeEventListener('beforeinstallprompt',h);
   },[]);
-
-  const installApp=()=>{
-    if(!installPrompt)return;
-    installPrompt.prompt();
-    installPrompt.userChoice.then(()=>{setInstallPrompt(null);});
-  };
-
-  const saveSettings=newS=>{
-    const credChanged=newS.adminUsername!==settings.adminUsername||newS.adminPassword!==settings.adminPassword;
-    setSettings(newS);
-    LS.set("settings",newS);
-    if(credChanged){
-      // Log out so they re-authenticate with new credentials
-      LS.set("auth",false);
-      setAuthed(false);
-      alert("Login credentials updated. Please sign in with your new username and password.");
-    }
-  };
 
   const login=()=>{LS.set("auth",true);setAuthed(true);};
   const logout=()=>{LS.set("auth",false);setAuthed(false);};
+  const saveSettings=(newS,credChanged)=>{setS(newS);LS.set("cfg",newS);if(credChanged){LS.set("auth",false);setAuthed(false);alert("Credentials updated. Please sign in again.");};};
 
-  // Use settings-driven credentials for login check
-  if(!authed) return <LoginPage onLogin={login} settings={settings}/>;
+  if(!authed) return <Login onLogin={login} S={S}/>;
 
   const carIDs=cars.map(c=>c.id);
-  const S=settings; // shorthand
-
-  const nav=[
+  const NAV=[
     {id:"dashboard",icon:"📊",label:"Dashboard"},
     {id:"finance",icon:"📈",label:"Financial Charts"},
     {id:"cars",icon:"🚐",label:"Fleet & Drivers"},
@@ -1245,77 +731,74 @@ function App(){
     {id:"log",icon:"📝",label:"Issue Log"},
     {id:"settings",icon:"⚙️",label:"Settings"},
   ];
-
-  const pages={
+  const PAGES={
     dashboard:<Dashboard cars={cars} sales={sales} expenses={expenses} oil={oil} salaries={salaries} parts={parts} logs={logs} payments={payments}/>,
-    finance:<FinancialChart sales={sales} expenses={expenses} oil={oil} salaries={salaries} parts={parts} payments={payments}/>,
-    cars:<CarsPage cars={cars} setCars={setCars}/>,
-    sales:<SalesPage sales={sales} setSales={setSales} carIDs={carIDs}/>,
-    payments:<PaymentsPage payments={payments} setPayments={setPayments}/>,
-    expenses:<ExpensesPage expenses={expenses} setExpenses={setExpenses}/>,
-    oil:<OilPage oil={oil} setOil={setOil}/>,
-    salaries:<SalariesPage salaries={salaries} setSalaries={setSalaries}/>,
-    parts:<PartsPage parts={parts} setParts={setParts} carIDs={carIDs}/>,
-    insurance:<InsurancePage insurance={insurance} setInsurance={setInsurance} cars={cars}/>,
-    log:<LogPage logs={logs} setLogs={setLogs} carIDs={carIDs}/>,
-    settings:<SettingsPage settings={settings} onSave={saveSettings}/>,
+    finance:<Finance sales={sales} expenses={expenses} oil={oil} salaries={salaries} parts={parts} payments={payments}/>,
+    cars:<Fleet cars={cars} setCars={setCars}/>,
+    sales:<Sales sales={sales} setSales={setSales} carIDs={carIDs}/>,
+    payments:<Payments payments={payments} setPayments={setPayments}/>,
+    expenses:<Expenses expenses={expenses} setExpenses={setExpenses}/>,
+    oil:<Oil oil={oil} setOil={setOil}/>,
+    salaries:<Salaries salaries={salaries} setSalaries={setSalaries}/>,
+    parts:<Parts parts={parts} setParts={setParts} carIDs={carIDs}/>,
+    insurance:<Insurance insurance={insurance} setInsurance={setInsurance} cars={cars}/>,
+    log:<IssueLog logs={logs} setLogs={setLogs} carIDs={carIDs}/>,
+    settings:<Settings S={S} onSave={saveSettings}/>,
   };
 
-  const logoBox=<div style={{width:38,height:38,borderRadius:9,background:S.accentColor,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
-    {S.logoImage
-      ?<img src={S.logoImage} alt="logo" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-      :<span style={{fontWeight:800,fontSize:13,color:"#fff",letterSpacing:0.5}}>{S.logoText||S.companyName.slice(0,3).toUpperCase()}</span>}
-  </div>;
+  const appBgStyle=S.appBg?{backgroundImage:`url(${S.appBg})`,backgroundSize:"cover",backgroundPosition:"center",backgroundAttachment:"fixed"}:{background:C.bg};
 
-  return <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",background:S.appBgImage?`url(${S.appBgImage}) center/cover fixed`:C.bg,minHeight:"100vh",display:"flex",flexDirection:"column"}}>
+  return <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",minHeight:"100vh",display:"flex",flexDirection:"column",...appBgStyle}}>
     {/* Header */}
     <div style={{background:S.primaryColor,color:"#fff",padding:"0 20px",display:"flex",alignItems:"center",justifyContent:"space-between",height:60,boxShadow:"0 2px 8px rgba(0,0,0,0.2)",position:"sticky",top:0,zIndex:100}}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
-        <button onClick={()=>setSideOpen(o=>!o)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",padding:4,lineHeight:1}}>☰</button>
-        {logoBox}
+        <button onClick={()=>setSideOpen(o=>!o)} style={{background:"none",border:"none",color:"#fff",fontSize:22,cursor:"pointer",lineHeight:1,padding:4}}>☰</button>
+        <div style={{width:40,height:40,borderRadius:10,background:S.accentColor,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
+          {S.logoImage?<img src={S.logoImage} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontWeight:800,fontSize:13,color:"#fff"}}>{S.logoText||S.companyName.slice(0,3).toUpperCase()}</span>}
+        </div>
         <div>
           <div style={{fontWeight:700,fontSize:16}}>{S.companyName}</div>
-          <div style={{fontSize:10,color:"rgba(255,255,255,0.6)"}}>{S.tagline}</div>
+          <div style={{fontSize:10,color:"rgba(255,255,255,0.65)"}}>{S.tagline}</div>
         </div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:16}}>
-        <div style={{fontSize:11,color:"rgba(255,255,255,0.65)",textAlign:"right"}}>
+        <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",textAlign:"right"}}>
           {S.address&&<div>📍 {S.address}</div>}
           {S.phone&&<div>📞 {S.phone}</div>}
-          {S.email&&<div>✉️ {S.email}</div>}
         </div>
         <button onClick={logout} style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.25)",color:"#fff",borderRadius:7,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:600}}>🔒 Logout</button>
       </div>
     </div>
 
-    {/* PWA Install Banner */}
+    {/* Install Banner */}
     {installPrompt&&!installDismissed&&<div style={{background:"#1a4a2c",color:"#fff",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:13,gap:12}}>
-      <span>📲 <strong>Install {S.companyName}</strong> — Add to your desktop for offline access, no internet needed.</span>
+      <span>📲 <b>Install {S.companyName}</b> — Add to your desktop to use offline anywhere.</span>
       <div style={{display:"flex",gap:8,flexShrink:0}}>
-        <button onClick={installApp} style={{background:S.accentColor,color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",fontWeight:700,fontSize:12,cursor:"pointer"}}>Install App</button>
+        <button onClick={()=>{installPrompt.prompt();installPrompt.userChoice.then(()=>setInstallPrompt(null));}} style={{background:S.accentColor,color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",fontWeight:700,fontSize:12,cursor:"pointer"}}>Install</button>
         <button onClick={()=>setInstallDismissed(true)} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"none",borderRadius:6,padding:"5px 10px",fontSize:12,cursor:"pointer"}}>✕</button>
       </div>
     </div>}
 
-    <div style={{display:"flex",flex:1,overflow:"hidden",height:`calc(100vh - ${60+(installPrompt&&!installDismissed?44:0)}px)`}}>
+    <div style={{display:"flex",flex:1,overflow:"hidden",height:`calc(100vh - ${installPrompt&&!installDismissed?104:60}px)`}}>
       {/* Sidebar */}
-      {sideOpen&&<div style={{width:205,background:"#fff",borderRight:`1px solid ${C.border}`,padding:"12px 0",display:"flex",flexDirection:"column",gap:1,flexShrink:0,overflowY:"auto"}}>
-        {nav.map(i=><button key={i.id} onClick={()=>setPage(i.id)} style={{
+      {sideOpen&&<div style={{width:210,background:"rgba(255,255,255,0.97)",borderRight:`1px solid ${C.border}`,padding:"10px 0",display:"flex",flexDirection:"column",flexShrink:0,overflowY:"auto"}}>
+        {NAV.map((n,i)=><button key={n.id} onClick={()=>setPage(n.id)} style={{
           display:"flex",alignItems:"center",gap:9,padding:"9px 18px",
-          background:page===i.id?"#eef2f8":"transparent",border:"none",cursor:"pointer",
-          textAlign:"left",color:page===i.id?S.primaryColor:C.text,
-          fontWeight:page===i.id?600:400,fontSize:13,
-          borderLeft:page===i.id?`3px solid ${S.primaryColor}`:"3px solid transparent",
-          marginTop:i.id==="settings"?8:0}}>
-          <span style={{fontSize:15}}>{i.icon}</span>{i.label}
+          background:page===n.id?"#eef2f8":"transparent",border:"none",cursor:"pointer",
+          textAlign:"left",color:page===n.id?S.primaryColor:C.text,
+          fontWeight:page===n.id?700:400,fontSize:13,
+          borderLeft:page===n.id?`3px solid ${S.primaryColor}`:"3px solid transparent",
+          marginTop:n.id==="settings"?10:0,
+          borderTop:n.id==="settings"?`1px solid ${C.border}`:"none"}}>
+          <span style={{fontSize:15}}>{n.icon}</span>{n.label}
         </button>)}
-        <div style={{borderTop:`1px solid ${C.border}`,margin:"8px 0 0",padding:"10px 18px 0"}}>
+        <div style={{padding:"12px 18px",marginTop:"auto",borderTop:`1px solid ${C.border}`}}>
           <div style={{fontSize:10,color:C.muted,fontWeight:600,marginBottom:4}}>SIGNED IN AS</div>
-          <div style={{fontSize:12,color:C.text,fontWeight:600}}>👤 {S.adminUsername}</div>
+          <div style={{fontSize:12,color:C.text,fontWeight:600}}>👤 {S.username}</div>
         </div>
       </div>}
-      {/* Main content */}
-      <div style={{flex:1,overflowY:"auto"}}>{pages[page]}</div>
+      {/* Content */}
+      <div style={{flex:1,overflowY:"auto"}}>{PAGES[page]||PAGES.dashboard}</div>
     </div>
   </div>;
 }
@@ -1323,12 +806,10 @@ function App(){
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 <script>
-// Register Service Worker for offline PWA support
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
     navigator.serviceWorker.register('/byt-transport/sw.js')
-      .then(reg => console.log('BYT Transport SW registered:', reg.scope))
-      .catch(err => console.log('SW registration failed:', err));
+      .then(r=>console.log('SW:',r.scope)).catch(e=>console.log('SW fail:',e));
   });
 }
 </script>
