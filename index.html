@@ -170,22 +170,25 @@ function getInsStatus(expiry){
 }
 
 // ─── LOGIN PAGE ───────────────────────────────────────────────────────────
-function LoginPage({onLogin}){
+function LoginPage({onLogin,settings}){
+  const S=settings||DEFAULT_SETTINGS;
   const [u,setU]=useState("");
   const [p,setP]=useState("");
   const [err,setErr]=useState("");
   const [show,setShow]=useState(false);
   const submit=()=>{
-    if(u===ADMIN_USER&&p===ADMIN_PASS){onLogin();}
+    if(u===S.adminUsername&&p===S.adminPassword){onLogin();}
     else{setErr("Invalid username or password.");setP("");}
   };
-  return <div style={{minHeight:"100vh",background:`linear-gradient(135deg,${C.primary} 0%,#2a5a8c 100%)`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+  return <div style={{minHeight:"100vh",background:`linear-gradient(135deg,${S.primaryColor} 0%,#2a5a8c 100%)`,display:"flex",alignItems:"center",justifyContent:"center"}}>
     <div style={{background:"#fff",borderRadius:16,padding:"40px 36px",width:360,boxShadow:"0 20px 60px rgba(0,0,0,0.25)"}}>
       <div style={{textAlign:"center",marginBottom:28}}>
-        <div style={{width:56,height:56,borderRadius:14,background:C.accent,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:20,color:"#fff",marginBottom:14}}>BYT</div>
-        <div style={{fontSize:20,fontWeight:700,color:C.primary}}>BYT Transport</div>
-        <div style={{fontSize:13,color:C.muted,marginTop:4}}>Admin Management System</div>
-        <div style={{fontSize:11,color:C.muted,marginTop:2}}>📍 Kasoa, Ghana &nbsp;•&nbsp; 0557086481</div>
+        <div style={{width:56,height:56,borderRadius:14,background:S.accentColor,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:20,color:"#fff",marginBottom:14,overflow:"hidden"}}>
+          {S.logoImage?<img src={S.logoImage} alt="logo" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span>{S.logoText||S.companyName.slice(0,3).toUpperCase()}</span>}
+        </div>
+        <div style={{fontSize:20,fontWeight:700,color:S.primaryColor}}>{S.companyName}</div>
+        <div style={{fontSize:13,color:C.muted,marginTop:4}}>{S.tagline}</div>
+        <div style={{fontSize:11,color:C.muted,marginTop:2}}>{S.address&&`📍 ${S.address}`}{S.address&&S.phone&&" • "}{S.phone&&`📞 ${S.phone}`}</div>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <Inp label="Username" value={u} onChange={setU} placeholder="admin" required/>
@@ -949,8 +952,166 @@ function LogPage({logs,setLogs,carIDs}){
   </div>;
 }
 
+// ─── SETTINGS PAGE ────────────────────────────────────────────────────────
+const DEFAULT_SETTINGS = {
+  companyName:"BYT Transport",
+  logoText:"BYT",
+  tagline:"Admin Management System",
+  address:"Kasoa, Ghana",
+  phone:"0557086481",
+  email:"",
+  primaryColor:"#1a3a5c",
+  accentColor:"#e8a020",
+  logoImage:"", // base64 image
+  adminUsername:"admin",
+  adminPassword:"byt2024",
+};
+
+function SettingsPage({settings,onSave}){
+  const [form,setForm]=useState({...settings});
+  const [saved,setSaved]=useState(false);
+  const [tab,setTab]=useState("branding");
+  const fld=k=>v=>setForm(f=>({...f,[k]:v}));
+
+  const handleLogoUpload=e=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    if(file.size>200000){alert("Image too large. Please use an image under 200KB.");return;}
+    const reader=new FileReader();
+    reader.onload=ev=>setForm(f=>({...f,logoImage:ev.target.result}));
+    reader.readAsDataURL(file);
+  };
+
+  const removeLogo=()=>setForm(f=>({...f,logoImage:""}));
+
+  const save=()=>{
+    if(!form.companyName)return alert("Company name is required");
+    if(!form.adminUsername||!form.adminPassword)return alert("Username and password are required");
+    onSave(form);
+    setSaved(true);
+    setTimeout(()=>setSaved(false),3000);
+  };
+
+  const reset=()=>{if(window.confirm("Reset all settings to defaults?"))setForm({...DEFAULT_SETTINGS});};
+
+  const tabs=[
+    {id:"branding",label:"🎨 Branding & Logo"},
+    {id:"contact",label:"📍 Contact Info"},
+    {id:"security",label:"🔐 Login & Security"},
+  ];
+
+  return <div style={{padding:24,maxWidth:700}}>
+    <div style={{marginBottom:24}}>
+      <h1 style={{fontSize:20,fontWeight:700,color:C.primary,margin:0}}>App Settings</h1>
+      <p style={{margin:"6px 0 0",fontSize:13,color:C.muted}}>Customise your company branding, contact details, and login credentials. All changes are saved locally on this device.</p>
+    </div>
+
+    {/* Tab bar */}
+    <div style={{display:"flex",gap:4,marginBottom:20,borderBottom:`1px solid ${C.border}`,paddingBottom:0}}>
+      {tabs.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{
+        padding:"9px 16px",fontSize:13,fontWeight:tab===t.id?700:400,
+        background:"none",border:"none",cursor:"pointer",
+        color:tab===t.id?C.primary:C.muted,
+        borderBottom:tab===t.id?`2px solid ${C.primary}`:"2px solid transparent",
+        marginBottom:-1}}>
+        {t.label}
+      </button>)}
+    </div>
+
+    {/* BRANDING TAB */}
+    {tab==="branding"&&<Card>
+      <h3 style={{fontSize:14,fontWeight:700,color:C.primary,marginBottom:16}}>Company Branding</h3>
+
+      {/* Logo preview */}
+      <div style={{marginBottom:20,padding:16,background:"#f4f6f9",borderRadius:10,display:"flex",alignItems:"center",gap:16}}>
+        <div style={{width:52,height:52,borderRadius:11,background:form.accentColor,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
+          {form.logoImage
+            ?<img src={form.logoImage} alt="logo" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+            :<span style={{fontWeight:800,fontSize:15,color:"#fff"}}>{form.logoText||"?"}</span>}
+        </div>
+        <div>
+          <div style={{fontWeight:700,fontSize:16,color:form.primaryColor}}>{form.companyName||"Company Name"}</div>
+          <div style={{fontSize:11,color:C.muted}}>{form.tagline||"Tagline"}</div>
+          <div style={{fontSize:11,color:C.muted,marginTop:2}}>📍 {form.address} &nbsp;•&nbsp; 📞 {form.phone}</div>
+        </div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
+        <Inp label="Company Name" value={form.companyName} onChange={fld("companyName")} required/>
+        <Inp label="Logo Letters (shown if no image)" value={form.logoText} onChange={fld("logoText")}/>
+        <div style={{gridColumn:"1/-1"}}><Inp label="App Tagline / Subtitle" value={form.tagline} onChange={fld("tagline")}/></div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
+        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+          <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Primary Colour (header & sidebar)</label>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <input type="color" value={form.primaryColor} onChange={e=>fld("primaryColor")(e.target.value)} style={{width:40,height:36,borderRadius:6,border:`1px solid ${C.border}`,cursor:"pointer",padding:2}}/>
+            <span style={{fontSize:12,color:C.muted,fontFamily:"monospace"}}>{form.primaryColor}</span>
+          </div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+          <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Accent Colour (logo box & buttons)</label>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <input type="color" value={form.accentColor} onChange={e=>fld("accentColor")(e.target.value)} style={{width:40,height:36,borderRadius:6,border:`1px solid ${C.border}`,cursor:"pointer",padding:2}}/>
+            <span style={{fontSize:12,color:C.muted,fontFamily:"monospace"}}>{form.accentColor}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Logo image upload */}
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Upload Logo Image (PNG/JPG, max 200KB)</label>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <label style={{background:C.primary,color:"#fff",borderRadius:7,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+            📁 Choose Image
+            <input type="file" accept="image/*" onChange={handleLogoUpload} style={{display:"none"}}/>
+          </label>
+          {form.logoImage&&<button onClick={removeLogo} style={{background:"none",border:`1px solid ${C.danger}`,color:C.danger,borderRadius:7,padding:"6px 12px",fontSize:12,cursor:"pointer",fontWeight:600}}>✕ Remove Image</button>}
+          {form.logoImage&&<span style={{fontSize:12,color:C.success}}>✓ Image loaded</span>}
+        </div>
+        <p style={{fontSize:11,color:C.muted,margin:0}}>If no image is uploaded, the Logo Letters text above will be shown instead.</p>
+      </div>
+    </Card>}
+
+    {/* CONTACT TAB */}
+    {tab==="contact"&&<Card>
+      <h3 style={{fontSize:14,fontWeight:700,color:C.primary,marginBottom:16}}>Contact Information</h3>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+        <div style={{gridColumn:"1/-1"}}><Inp label="Address / Location" value={form.address} onChange={fld("address")}/></div>
+        <Inp label="Phone Number" value={form.phone} onChange={fld("phone")}/>
+        <Inp label="Email Address (optional)" value={form.email} onChange={fld("email")} type="email"/>
+      </div>
+      <div style={{marginTop:14,padding:12,background:"#f4f6f9",borderRadius:8,fontSize:12,color:C.muted}}>
+        These details appear in the app header and on the login screen.
+      </div>
+    </Card>}
+
+    {/* SECURITY TAB */}
+    {tab==="security"&&<Card>
+      <h3 style={{fontSize:14,fontWeight:700,color:C.primary,marginBottom:6}}>Login Credentials</h3>
+      <p style={{fontSize:13,color:C.muted,marginBottom:16}}>Change the username and password used to access this app. You will be logged out after saving and must log in with the new credentials.</p>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+        <Inp label="Admin Username" value={form.adminUsername} onChange={fld("adminUsername")} required/>
+        <Inp label="Admin Password" value={form.adminPassword} onChange={fld("adminPassword")} type="password" required/>
+      </div>
+      <div style={{marginTop:14,padding:12,background:C.warnBg,border:`1px solid ${C.warnBorder}`,borderRadius:8,fontSize:12,color:C.warnText}}>
+        ⚠️ After saving a new password, write it down somewhere safe. If you forget it, you will need to clear your browser data to reset.
+      </div>
+    </Card>}
+
+    {/* Save bar */}
+    <div style={{display:"flex",gap:10,alignItems:"center",marginTop:20}}>
+      <button onClick={save} style={{background:C.primary,color:"#fff",border:"none",borderRadius:8,padding:"10px 24px",fontSize:14,fontWeight:700,cursor:"pointer"}}>💾 Save Changes</button>
+      <button onClick={reset} style={{background:"#fff",color:C.muted,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 16px",fontSize:13,cursor:"pointer"}}>Reset to Defaults</button>
+      {saved&&<span style={{fontSize:13,color:C.success,fontWeight:600}}>✓ Settings saved successfully!</span>}
+    </div>
+  </div>;
+}
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────────
 function App(){
+  const [settings,setSettings]=useState(()=>({...DEFAULT_SETTINGS,...(LS.get("settings")||{})}));
   const [authed,setAuthed]=useState(()=>LS.get("auth")===true);
   const [page,setPage]=useState("dashboard");
   const [sideOpen,setSideOpen]=useState(true);
@@ -978,12 +1139,26 @@ function App(){
     installPrompt.userChoice.then(()=>{setInstallPrompt(null);});
   };
 
+  const saveSettings=newS=>{
+    const credChanged=newS.adminUsername!==settings.adminUsername||newS.adminPassword!==settings.adminPassword;
+    setSettings(newS);
+    LS.set("settings",newS);
+    if(credChanged){
+      // Log out so they re-authenticate with new credentials
+      LS.set("auth",false);
+      setAuthed(false);
+      alert("Login credentials updated. Please sign in with your new username and password.");
+    }
+  };
+
   const login=()=>{LS.set("auth",true);setAuthed(true);};
   const logout=()=>{LS.set("auth",false);setAuthed(false);};
 
-  if(!authed) return <LoginPage onLogin={login}/>;
+  // Use settings-driven credentials for login check
+  if(!authed) return <LoginPage onLogin={login} settings={settings}/>;
 
   const carIDs=cars.map(c=>c.id);
+  const S=settings; // shorthand
 
   const nav=[
     {id:"dashboard",icon:"📊",label:"Dashboard"},
@@ -997,6 +1172,7 @@ function App(){
     {id:"parts",icon:"🔧",label:"Car Parts"},
     {id:"insurance",icon:"🛡️",label:"Insurance"},
     {id:"log",icon:"📝",label:"Issue Log"},
+    {id:"settings",icon:"⚙️",label:"Settings"},
   ];
 
   const pages={
@@ -1011,22 +1187,31 @@ function App(){
     parts:<PartsPage parts={parts} setParts={setParts} carIDs={carIDs}/>,
     insurance:<InsurancePage insurance={insurance} setInsurance={setInsurance} cars={cars}/>,
     log:<LogPage logs={logs} setLogs={setLogs} carIDs={carIDs}/>,
+    settings:<SettingsPage settings={settings} onSave={saveSettings}/>,
   };
 
+  const logoBox=<div style={{width:38,height:38,borderRadius:9,background:S.accentColor,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
+    {S.logoImage
+      ?<img src={S.logoImage} alt="logo" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+      :<span style={{fontWeight:800,fontSize:13,color:"#fff",letterSpacing:0.5}}>{S.logoText||S.companyName.slice(0,3).toUpperCase()}</span>}
+  </div>;
+
   return <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",background:C.bg,minHeight:"100vh",display:"flex",flexDirection:"column"}}>
-    <div style={{background:C.primary,color:"#fff",padding:"0 20px",display:"flex",alignItems:"center",justifyContent:"space-between",height:60,boxShadow:"0 2px 8px rgba(0,0,0,0.2)",position:"sticky",top:0,zIndex:100}}>
+    {/* Header */}
+    <div style={{background:S.primaryColor,color:"#fff",padding:"0 20px",display:"flex",alignItems:"center",justifyContent:"space-between",height:60,boxShadow:"0 2px 8px rgba(0,0,0,0.2)",position:"sticky",top:0,zIndex:100}}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
         <button onClick={()=>setSideOpen(o=>!o)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",padding:4,lineHeight:1}}>☰</button>
-        <div style={{width:38,height:38,borderRadius:9,background:C.accent,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14,color:"#fff"}}>BYT</div>
+        {logoBox}
         <div>
-          <div style={{fontWeight:700,fontSize:16}}>BYT Transport</div>
-          <div style={{fontSize:10,color:"rgba(255,255,255,0.6)"}}>Admin Management System</div>
+          <div style={{fontWeight:700,fontSize:16}}>{S.companyName}</div>
+          <div style={{fontSize:10,color:"rgba(255,255,255,0.6)"}}>{S.tagline}</div>
         </div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:16}}>
         <div style={{fontSize:11,color:"rgba(255,255,255,0.65)",textAlign:"right"}}>
-          <div>📍 Kasoa, Ghana</div>
-          <div>📞 0557086481</div>
+          {S.address&&<div>📍 {S.address}</div>}
+          {S.phone&&<div>📞 {S.phone}</div>}
+          {S.email&&<div>✉️ {S.email}</div>}
         </div>
         <button onClick={logout} style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.25)",color:"#fff",borderRadius:7,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:600}}>🔒 Logout</button>
       </div>
@@ -1034,28 +1219,31 @@ function App(){
 
     {/* PWA Install Banner */}
     {installPrompt&&!installDismissed&&<div style={{background:"#1a4a2c",color:"#fff",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:13,gap:12}}>
-      <span>📲 <strong>Install BYT Transport</strong> — Add to your desktop for offline access, no internet needed.</span>
+      <span>📲 <strong>Install {S.companyName}</strong> — Add to your desktop for offline access, no internet needed.</span>
       <div style={{display:"flex",gap:8,flexShrink:0}}>
-        <button onClick={installApp} style={{background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",fontWeight:700,fontSize:12,cursor:"pointer"}}>Install App</button>
+        <button onClick={installApp} style={{background:S.accentColor,color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",fontWeight:700,fontSize:12,cursor:"pointer"}}>Install App</button>
         <button onClick={()=>setInstallDismissed(true)} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"none",borderRadius:6,padding:"5px 10px",fontSize:12,cursor:"pointer"}}>✕</button>
       </div>
     </div>}
 
     <div style={{display:"flex",flex:1,overflow:"hidden",height:`calc(100vh - ${60+(installPrompt&&!installDismissed?44:0)}px)`}}>
+      {/* Sidebar */}
       {sideOpen&&<div style={{width:205,background:"#fff",borderRight:`1px solid ${C.border}`,padding:"12px 0",display:"flex",flexDirection:"column",gap:1,flexShrink:0,overflowY:"auto"}}>
         {nav.map(i=><button key={i.id} onClick={()=>setPage(i.id)} style={{
           display:"flex",alignItems:"center",gap:9,padding:"9px 18px",
           background:page===i.id?"#eef2f8":"transparent",border:"none",cursor:"pointer",
-          textAlign:"left",color:page===i.id?C.primary:C.text,
+          textAlign:"left",color:page===i.id?S.primaryColor:C.text,
           fontWeight:page===i.id?600:400,fontSize:13,
-          borderLeft:page===i.id?`3px solid ${C.primary}`:"3px solid transparent"}}>
+          borderLeft:page===i.id?`3px solid ${S.primaryColor}`:"3px solid transparent",
+          marginTop:i.id==="settings"?8:0}}>
           <span style={{fontSize:15}}>{i.icon}</span>{i.label}
         </button>)}
-        <div style={{borderTop:`1px solid ${C.border}`,margin:"12px 0 0",padding:"12px 18px 0"}}>
-          <div style={{fontSize:10,color:C.muted,fontWeight:600,marginBottom:6}}>ADMIN</div>
-          <div style={{fontSize:12,color:C.text,fontWeight:600}}>👤 {ADMIN_USER}</div>
+        <div style={{borderTop:`1px solid ${C.border}`,margin:"8px 0 0",padding:"10px 18px 0"}}>
+          <div style={{fontSize:10,color:C.muted,fontWeight:600,marginBottom:4}}>SIGNED IN AS</div>
+          <div style={{fontSize:12,color:C.text,fontWeight:600}}>👤 {S.adminUsername}</div>
         </div>
       </div>}
+      {/* Main content */}
       <div style={{flex:1,overflowY:"auto"}}>{pages[page]}</div>
     </div>
   </div>;
