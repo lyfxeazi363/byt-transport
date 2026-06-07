@@ -60,6 +60,22 @@ const daysUntil=d=>{if(!d)return null;return Math.ceil((new Date(d)-new Date())/
 const expiryStatus=d=>{const n=daysUntil(d);if(n===null)return"Unknown";if(n<0)return"Expired";if(n<=30)return"Expiring Soon";return"Active";};
 const WEEKS=Array.from({length:20},(_,i)=>{const d=new Date();d.setDate(d.getDate()-i*7);const wn=Math.ceil((d-new Date(d.getFullYear(),0,1))/(864e5*7));return`Week ${wn} ${d.getFullYear()}`;});
 
+const DEFAULT_BRAND={
+  companyName:"BYT Transport",
+  logoText:"BYT",
+  tagline:"Management System",
+  address:"Kasoa, Ghana",
+  phone:"0557086481",
+  email:"",
+  primaryColor:"#1a3a5c",
+  accentColor:"#e8a020",
+  logoImage:"",
+  loginBg:"",
+  appBg:"",
+};
+const loadBrand=()=>({...DEFAULT_BRAND,...(LS.get("brand")||{})});
+const saveBrand=b=>LS.set("brand",b);
+
 /* ─────────────────────────────────────────
    INITIAL DATA BOOTSTRAP
 ───────────────────────────────────────── */
@@ -230,7 +246,8 @@ function useData(key){
 /* ─────────────────────────────────────────
    LOGIN
 ───────────────────────────────────────── */
-function Login({onLogin}){
+function Login({onLogin,brand}){
+  const B=brand||DEFAULT_BRAND;
   const [tab,setTab]=useState("login");
   // Login state
   const [u,setU]=useState(""),[p,setP]=useState(""),[err,setErr]=useState(""),[show,setShow]=useState(false);
@@ -261,12 +278,18 @@ function Login({onLogin}){
   };
 
   const Logo=()=><div style={{textAlign:"center",marginBottom:26}}>
-    <div style={{width:60,height:60,borderRadius:14,background:C.accent,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:20,color:"#fff",marginBottom:14,boxShadow:"0 4px 16px rgba(232,160,32,0.4)"}}>BYT</div>
-    <div style={{fontSize:21,fontWeight:800,color:C.primary}}>BYT Transport</div>
-    <div style={{fontSize:12,color:C.muted,marginTop:3}}>📍 Kasoa, Ghana &nbsp;•&nbsp; 0557086481</div>
+    <div style={{width:60,height:60,borderRadius:14,background:B.accentColor,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:20,color:"#fff",marginBottom:14,boxShadow:`0 4px 16px ${B.accentColor}66`,overflow:"hidden"}}>
+      {B.logoImage?<img src={B.logoImage} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span>{B.logoText||B.companyName.slice(0,3).toUpperCase()}</span>}
+    </div>
+    <div style={{fontSize:21,fontWeight:800,color:B.primaryColor}}>{B.companyName}</div>
+    <div style={{fontSize:12,color:C.muted,marginTop:3}}>{B.address&&`📍 ${B.address}`}{B.address&&B.phone&&" • "}{B.phone&&`📞 ${B.phone}`}</div>
   </div>;
 
-  return <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1a3a5c 0%,#0f2540 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+  const bgStyle=B.loginBg
+    ?{backgroundImage:`url(${B.loginBg})`,backgroundSize:"cover",backgroundPosition:"center"}
+    :{background:`linear-gradient(135deg,${B.primaryColor} 0%,#0f2540 100%)`};
+
+  return <div style={{minHeight:"100vh",...bgStyle,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
     <div style={{background:"#fff",borderRadius:18,padding:"36px 36px 28px",width:"100%",maxWidth:400,boxShadow:"0 24px 64px rgba(0,0,0,0.35)"}}>
       <Logo/>
       {/* Tab switcher */}
@@ -323,21 +346,29 @@ function Login({onLogin}){
 /* ─────────────────────────────────────────
    SHELL (shared header + sidebar wrapper)
 ───────────────────────────────────────── */
-function Shell({user,onLogout,children,nav,activePage,setPage}){
+function Shell({user,onLogout,children,nav,activePage,setPage,brand}){
   const [open,setOpen]=useState(true);
-  const roleColor=ROLE_COLORS[user.role]||C.primary;
-  return <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column"}}>
+  const B=brand||DEFAULT_BRAND;
+  const roleColor=user.role===ROLES.GM?B.primaryColor:(ROLE_COLORS[user.role]||C.primary);
+  const appBgStyle=B.appBg?{backgroundImage:`url(${B.appBg})`,backgroundSize:"cover",backgroundPosition:"center",backgroundAttachment:"fixed"}:{background:C.bg};
+  return <div style={{minHeight:"100vh",...appBgStyle,display:"flex",flexDirection:"column"}}>
     {/* Header */}
     <div style={{background:roleColor,color:"#fff",height:60,padding:"0 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 10px rgba(0,0,0,0.2)"}}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
         <button onClick={()=>setOpen(o=>!o)} style={{background:"none",border:"none",color:"#fff",fontSize:22,cursor:"pointer",lineHeight:1,padding:4}}>☰</button>
-        <div style={{width:40,height:40,borderRadius:10,background:C.accent,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:14,color:"#fff",flexShrink:0}}>BYT</div>
+        <div style={{width:40,height:40,borderRadius:10,background:B.accentColor,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,color:"#fff",flexShrink:0,overflow:"hidden"}}>
+          {B.logoImage?<img src={B.logoImage} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span>{B.logoText||B.companyName.slice(0,3).toUpperCase()}</span>}
+        </div>
         <div>
-          <div style={{fontWeight:700,fontSize:16}}>BYT Transport</div>
+          <div style={{fontWeight:700,fontSize:16}}>{B.companyName}</div>
           <div style={{fontSize:10,color:"rgba(255,255,255,0.7)"}}>{ROLE_LABELS[user.role]} Portal</div>
         </div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:14}}>
+        <div style={{fontSize:11,color:"rgba(255,255,255,0.8)",textAlign:"right"}}>
+          {B.address&&<div>📍 {B.address}</div>}
+          {B.phone&&<div>📞 {B.phone}</div>}
+        </div>
         <div style={{fontSize:12,color:"rgba(255,255,255,0.85)",textAlign:"right"}}>
           <div style={{fontWeight:600}}>{user.name}</div>
           <div style={{fontSize:10,opacity:0.7}}>{ROLE_LABELS[user.role]}</div>
@@ -347,7 +378,7 @@ function Shell({user,onLogout,children,nav,activePage,setPage}){
     </div>
     <div style={{display:"flex",flex:1,overflow:"hidden",height:"calc(100vh - 60px)"}}>
       {/* Sidebar */}
-      {open&&<div style={{width:220,background:"#fff",borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",flexShrink:0,overflowY:"auto"}}>
+      {open&&<div style={{width:220,background:"rgba(255,255,255,0.97)",borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",flexShrink:0,overflowY:"auto"}}>
         <div style={{padding:"14px 16px 8px",fontSize:10,fontWeight:700,color:C.muted,letterSpacing:"0.08em"}}>NAVIGATION</div>
         {nav.map((n,i)=>{
           const isSection=n.section;
@@ -368,9 +399,139 @@ function Shell({user,onLogout,children,nav,activePage,setPage}){
 }
 
 /* ═══════════════════════════════════════
+   GM SETTINGS PAGE
+═══════════════════════════════════════ */
+function GMSettings({brand,onSave}){
+  const [f,setF]=useState({...brand});
+  const [tab,setTab]=useState("branding");
+  const [saved,setSaved]=useState(false);
+  const set=k=>v=>setF(p=>({...p,[k]:v}));
+
+  const upload=(key,maxKB)=>e=>{
+    const file=e.target.files[0];if(!file)return;
+    if(file.size>maxKB*1024){alert(`Please use an image under ${maxKB}KB.`);e.target.value="";return;}
+    const r=new FileReader();
+    r.onload=ev=>setF(p=>({...p,[key]:ev.target.result}));
+    r.readAsDataURL(file);e.target.value="";
+  };
+
+  const save=()=>{
+    if(!f.companyName)return alert("Company name is required.");
+    onSave(f);setSaved(true);setTimeout(()=>setSaved(false),3000);
+  };
+
+  const TABS=[{id:"branding",label:"🎨 Logo & Branding"},{id:"backgrounds",label:"🖼️ Backgrounds"},{id:"contact",label:"📍 Contact Info"}];
+
+  const ColorPicker=({label,k})=>(
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      <label style={{fontSize:12,fontWeight:600,color:C.muted}}>{label}</label>
+      <div style={{display:"flex",gap:10,alignItems:"center"}}>
+        <input type="color" value={f[k]} onChange={e=>set(k)(e.target.value)} style={{width:44,height:36,borderRadius:7,border:`1px solid ${C.border}`,cursor:"pointer",padding:2}}/>
+        <span style={{fontSize:12,fontFamily:"monospace",color:C.muted}}>{f[k]}</span>
+        <div style={{width:28,height:28,borderRadius:6,background:f[k],border:`1px solid ${C.border}`}}/>
+      </div>
+    </div>
+  );
+
+  const UploadField=({label,fieldKey,maxKB,hint})=>(
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      <label style={{fontSize:12,fontWeight:600,color:C.muted}}>{label}</label>
+      <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+        <label style={{background:C.primary,color:"#fff",borderRadius:7,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",display:"inline-block"}}>
+          📁 Choose Image
+          <input type="file" accept="image/png,image/jpeg,image/webp" onChange={upload(fieldKey,maxKB)} style={{display:"none"}}/>
+        </label>
+        {f[fieldKey]
+          ?<><span style={{fontSize:12,color:C.success,fontWeight:600}}>✓ Image set</span>
+            <button onClick={()=>setF(p=>({...p,[fieldKey]:""}))} style={{background:"none",border:`1px solid ${C.danger}`,color:C.danger,borderRadius:6,padding:"5px 10px",fontSize:11,cursor:"pointer",fontWeight:600}}>✕ Remove</button></>
+          :<span style={{fontSize:12,color:C.muted}}>No image set</span>}
+      </div>
+      {hint&&<span style={{fontSize:11,color:C.muted}}>{hint}</span>}
+      {f[fieldKey]&&<div style={{width:"100%",height:100,borderRadius:9,overflow:"hidden",border:`1px solid ${C.border}`,backgroundImage:`url(${f[fieldKey]})`,backgroundSize:"cover",backgroundPosition:"center"}}/>}
+    </div>
+  );
+
+  return <div className="fade" style={{maxWidth:680}}>
+    <PageTitle title="⚙️ App Settings" sub="Customise branding, backgrounds and contact details. Changes apply across the entire platform instantly."/>
+
+    {/* Live preview bar */}
+    <Card style={{marginBottom:22,padding:"14px 18px"}}>
+      <div style={{fontSize:11,fontWeight:700,color:C.muted,marginBottom:10,letterSpacing:"0.06em"}}>LIVE PREVIEW</div>
+      <div style={{display:"flex",alignItems:"center",gap:14,background:f.primaryColor,borderRadius:10,padding:"12px 18px"}}>
+        <div style={{width:44,height:44,borderRadius:10,background:f.accentColor,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
+          {f.logoImage?<img src={f.logoImage} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontWeight:900,fontSize:13,color:"#fff"}}>{f.logoText||f.companyName.slice(0,3).toUpperCase()}</span>}
+        </div>
+        <div>
+          <div style={{fontWeight:700,fontSize:16,color:"#fff"}}>{f.companyName||"Company Name"}</div>
+          <div style={{fontSize:10,color:"rgba(255,255,255,0.7)"}}>{f.tagline}</div>
+        </div>
+        <div style={{marginLeft:"auto",fontSize:11,color:"rgba(255,255,255,0.75)",textAlign:"right"}}>
+          {f.address&&<div>📍 {f.address}</div>}
+          {f.phone&&<div>📞 {f.phone}</div>}
+        </div>
+      </div>
+    </Card>
+
+    {/* Tabs */}
+    <div style={{display:"flex",gap:2,borderBottom:`2px solid ${C.border}`,marginBottom:22}}>
+      {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"9px 20px",fontSize:13,fontWeight:tab===t.id?700:400,background:"none",border:"none",cursor:"pointer",color:tab===t.id?C.primary:C.muted,borderBottom:tab===t.id?`2px solid ${C.primary}`:"2px solid transparent",marginBottom:-2,whiteSpace:"nowrap"}}>{t.label}</button>)}
+    </div>
+
+    {/* BRANDING TAB */}
+    {tab==="branding"&&<Card>
+      <SectionTitle title="Company Identity"/>
+      <FormGrid>
+        <Inp label="Company Name" value={f.companyName} onChange={set("companyName")} req/>
+        <Inp label="App Tagline / Subtitle" value={f.tagline} onChange={set("tagline")}/>
+        <Inp label="Logo Letters (if no image uploaded)" value={f.logoText} onChange={set("logoText")} ph="e.g. BYT"/>
+      </FormGrid>
+      <SectionTitle title="Colours" />
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
+        <ColorPicker label="Primary Colour (header & sidebar)" k="primaryColor"/>
+        <ColorPicker label="Accent Colour (logo box & buttons)" k="accentColor"/>
+      </div>
+      <SectionTitle title="Logo Image"/>
+      <UploadField label="Upload Logo (PNG/JPG, max 200KB)" fieldKey="logoImage" maxKB={200} hint="This replaces the logo letters everywhere — header, login screen and sidebar."/>
+    </Card>}
+
+    {/* BACKGROUNDS TAB */}
+    {tab==="backgrounds"&&<div style={{display:"flex",flexDirection:"column",gap:18}}>
+      <Card>
+        <SectionTitle title="Login Screen Background"/>
+        <p style={{fontSize:13,color:C.muted,marginBottom:16}}>This image appears behind the login card when users open the app. Recommended size: 1920×1080px.</p>
+        <UploadField label="Upload Login Background (max 1.5MB)" fieldKey="loginBg" maxKB={1500} hint="PNG, JPG or WEBP. The gradient uses your primary colour if no image is set."/>
+      </Card>
+      <Card>
+        <SectionTitle title="App / Dashboard Background"/>
+        <p style={{fontSize:13,color:C.muted,marginBottom:16}}>Appears behind all portal pages. Use a subtle image so text stays readable.</p>
+        <UploadField label="Upload App Background (max 1.5MB)" fieldKey="appBg" maxKB={1500} hint="Tip: low-contrast textures or slightly blurred photos work best."/>
+      </Card>
+    </div>}
+
+    {/* CONTACT TAB */}
+    {tab==="contact"&&<Card>
+      <SectionTitle title="Contact Details"/>
+      <p style={{fontSize:13,color:C.muted,marginBottom:16}}>These appear in the header and on the login screen for all users.</p>
+      <FormGrid>
+        <FullCol><Inp label="Address / Location" value={f.address} onChange={set("address")} ph="e.g. Kasoa, Ghana"/></FullCol>
+        <Inp label="Phone Number" value={f.phone} onChange={set("phone")} ph="e.g. 0557086481"/>
+        <Inp label="Email Address (optional)" value={f.email} onChange={set("email")} type="email" ph="info@company.gh"/>
+      </FormGrid>
+    </Card>}
+
+    {/* Save bar */}
+    <div style={{display:"flex",gap:12,alignItems:"center",marginTop:22}}>
+      <button onClick={save} style={{background:C.primary,color:"#fff",border:"none",borderRadius:9,padding:"11px 28px",fontSize:14,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 12px rgba(26,58,92,0.2)"}}>💾 Save Changes</button>
+      <button onClick={()=>setF({...DEFAULT_BRAND})} style={{background:"#fff",color:C.muted,border:`1px solid ${C.border}`,borderRadius:9,padding:"11px 18px",fontSize:13,cursor:"pointer"}}>Reset to Defaults</button>
+      {saved&&<span style={{fontSize:13,color:C.success,fontWeight:700}}>✓ Settings saved! Changes are live.</span>}
+    </div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════
    GENERAL MANAGER PORTAL
 ═══════════════════════════════════════ */
-function GMPortal({user,onLogout}){
+function GMPortal({user,onLogout,brand,onBrandUpdate}){
   const [page,setPage]=useState("dashboard");
   const {data:users,save:saveUsers,add:addUser,update:updateUser,remove:removeUser}=useData("users");
   const {data:carInfo}=useData("carInfo");
@@ -399,6 +560,8 @@ function GMPortal({user,onLogout}){
     {id:"oil",icon:"🛢️",label:"Oil Records"},
     {id:"payments",icon:"💳",label:"Payments"},
     {id:"logs",icon:"📝",label:"Issue Logs"},
+    {section:true,label:"ADMIN"},
+    {id:"settings",icon:"⚙️",label:"App Settings"},
   ];
 
   const pages={
@@ -413,9 +576,10 @@ function GMPortal({user,onLogout}){
     oil:<GMOil oil={oil}/>,
     payments:<GMPayments payments={payments}/>,
     logs:<GMLogs logs={logs}/>,
+    settings:<GMSettings brand={brand} onSave={onBrandUpdate}/>,
   };
 
-  return <Shell user={user} onLogout={onLogout} nav={nav} activePage={page} setPage={setPage}>
+  return <Shell user={user} onLogout={onLogout} nav={nav} activePage={page} setPage={setPage} brand={brand}>
     {pages[page]||pages.dashboard}
   </Shell>;
 }
@@ -771,7 +935,7 @@ function GMLogs({logs}){
 /* ═══════════════════════════════════════
    OPERATIONAL MANAGER PORTAL
 ═══════════════════════════════════════ */
-function OpsPortal({user,onLogout}){
+function OpsPortal({user,onLogout,brand}){
   const [page,setPage]=useState("dashboard");
   const {data:opsSales,add:addOSale,update:updateOSale,remove:removeOSale}=useData("opsSales");
   const {data:parts,add:addPart,update:updatePart,remove:removePart}=useData("parts");
@@ -803,7 +967,7 @@ function OpsPortal({user,onLogout}){
     logs:<OpsLogs logs={logs} addLog={addLog} updateLog={updateLog} removeLog={removeLog} carInfo={carInfo} user={user}/>,
   };
 
-  return <Shell user={user} onLogout={onLogout} nav={nav} activePage={page} setPage={setPage}>
+  return <Shell user={user} onLogout={onLogout} nav={nav} activePage={page} setPage={setPage} brand={brand}>
     {pages[page]||pages.dashboard}
   </Shell>;
 }
@@ -1044,7 +1208,7 @@ function OpsLogs({logs,addLog,updateLog,removeLog,carInfo,user}){
 /* ═══════════════════════════════════════
    DRIVER PORTAL
 ═══════════════════════════════════════ */
-function DriverPortal({user,onLogout}){
+function DriverPortal({user,onLogout,brand}){
   const [page,setPage]=useState("dashboard");
   const {data:carInfoAll,save:saveCarInfo}=useData("carInfo");
   const {data:salesAll,save:saveSalesAll}=useData("driverSales");
@@ -1073,7 +1237,7 @@ function DriverPortal({user,onLogout}){
     sales:<DriverSales user={user} mySales={mySales} addSale={addSale} updateSale={updateSale} removeSale={removeSale}/>,
   };
 
-  return <Shell user={user} onLogout={onLogout} nav={nav} activePage={page} setPage={setPage}>
+  return <Shell user={user} onLogout={onLogout} nav={nav} activePage={page} setPage={setPage} brand={brand}>
     {pages[page]||pages.dashboard}
   </Shell>;
 }
@@ -1195,6 +1359,7 @@ function DriverSales({user,mySales,addSale,updateSale,removeSale}){
    ROOT APP
 ═══════════════════════════════════════ */
 function App(){
+  const [brand,setBrand]=useState(loadBrand);
   const [user,setUser]=useState(()=>{
     const saved=LS.get("session");
     if(!saved)return null;
@@ -1204,12 +1369,13 @@ function App(){
 
   const login=u=>{setUser(u);LS.set("session",u.id);};
   const logout=()=>{setUser(null);LS.set("session",null);};
+  const updateBrand=b=>{setBrand(b);saveBrand(b);};
 
-  if(!user)return <Login onLogin={login}/>;
-  if(user.role===ROLES.GM)return <GMPortal user={user} onLogout={logout}/>;
-  if(user.role===ROLES.OPS)return <OpsPortal user={user} onLogout={logout}/>;
-  if(user.role===ROLES.DRIVER)return <DriverPortal user={user} onLogout={logout}/>;
-  return <Login onLogin={login}/>;
+  if(!user)return <Login onLogin={login} brand={brand}/>;
+  if(user.role===ROLES.GM)return <GMPortal user={user} onLogout={logout} brand={brand} onBrandUpdate={updateBrand}/>;
+  if(user.role===ROLES.OPS)return <OpsPortal user={user} onLogout={logout} brand={brand}/>;
+  if(user.role===ROLES.DRIVER)return <DriverPortal user={user} onLogout={logout} brand={brand}/>;
+  return <Login onLogin={login} brand={brand}/>;
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
