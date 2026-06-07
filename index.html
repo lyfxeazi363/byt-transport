@@ -67,11 +67,11 @@ function bootstrap(){
   if(LS.get("bootstrapped"))return;
   // Seed users
   const users=[
-    {id:"gm1",role:ROLES.GM,username:"gm",password:"gm2024",name:"General Manager",email:"gm@byttransport.gh",createdAt:today()},
-    {id:"ops1",role:ROLES.OPS,username:"ops",password:"ops2024",name:"Ops Manager",email:"ops@byttransport.gh",createdAt:today()},
-    {id:"drv1",role:ROLES.DRIVER,username:"kwame",password:"drv2024",name:"Kwame Asante",driverID:"DRV-101",email:"",createdAt:today()},
-    {id:"drv2",role:ROLES.DRIVER,username:"kofi",password:"drv2024",name:"Kofi Mensah",driverID:"DRV-102",email:"",createdAt:today()},
-    {id:"drv3",role:ROLES.DRIVER,username:"yaw",password:"drv2024",name:"Yaw Boateng",driverID:"DRV-103",email:"",createdAt:today()},
+    {id:"gm1",role:ROLES.GM,username:"gm",password:"gm2024",name:"General Manager",email:"gm@byttransport.gh",status:"active",createdAt:today()},
+    {id:"ops1",role:ROLES.OPS,username:"ops",password:"ops2024",name:"Ops Manager",email:"ops@byttransport.gh",status:"active",createdAt:today()},
+    {id:"drv1",role:ROLES.DRIVER,username:"kwame",password:"drv2024",name:"Kwame Asante",driverID:"DRV-101",email:"",status:"active",createdAt:today()},
+    {id:"drv2",role:ROLES.DRIVER,username:"kofi",password:"drv2024",name:"Kofi Mensah",driverID:"DRV-102",email:"",status:"active",createdAt:today()},
+    {id:"drv3",role:ROLES.DRIVER,username:"yaw",password:"drv2024",name:"Yaw Boateng",driverID:"DRV-103",email:"",status:"active",createdAt:today()},
   ];
   LS.set("users",users);
 
@@ -231,21 +231,51 @@ function useData(key){
    LOGIN
 ───────────────────────────────────────── */
 function Login({onLogin}){
+  const [tab,setTab]=useState("login");
+  // Login state
   const [u,setU]=useState(""),[p,setP]=useState(""),[err,setErr]=useState(""),[show,setShow]=useState(false);
+  // Register state
+  const [reg,setReg]=useState({name:"",driverID:"",username:"",password:"",confirmPassword:""});
+  const [regErr,setRegErr]=useState(""),[regOk,setRegOk]=useState(false),[showReg,setShowReg]=useState(false);
+  const rf=k=>v=>setReg(r=>({...r,[k]:v}));
+
   const go=()=>{
     const users=LS.get("users")||[];
     const user=users.find(x=>x.username===u.trim()&&x.password===p);
-    if(user){onLogin(user);}else{setErr("Invalid username or password.");setP("");}
+    if(!user){setErr("Invalid username or password.");setP("");return;}
+    if(user.status==="pending"){setErr("Your account is pending approval by the General Manager. Please wait.");return;}
+    if(user.status==="suspended"){setErr("Your account has been suspended. Please contact the General Manager.");return;}
+    onLogin(user);
   };
-  return <div style={{minHeight:"100vh",background:`linear-gradient(135deg,#1a3a5c 0%,#0f2540 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-    <div style={{background:"#fff",borderRadius:18,padding:"44px 40px",width:"100%",maxWidth:380,boxShadow:"0 24px 64px rgba(0,0,0,0.35)"}}>
-      <div style={{textAlign:"center",marginBottom:30}}>
-        <div style={{width:64,height:64,borderRadius:16,background:C.accent,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:22,color:"#fff",marginBottom:16,boxShadow:"0 4px 16px rgba(232,160,32,0.4)"}}>BYT</div>
-        <div style={{fontSize:22,fontWeight:800,color:C.primary}}>BYT Transport</div>
-        <div style={{fontSize:13,color:C.muted,marginTop:4}}>Management System — Sign In</div>
-        <div style={{fontSize:11,color:C.muted,marginTop:3}}>📍 Kasoa, Ghana &nbsp;•&nbsp; 0557086481</div>
+
+  const register=()=>{
+    setRegErr("");
+    if(!reg.name||!reg.username||!reg.password)return setRegErr("Full name, username and password are required.");
+    if(reg.password!==reg.confirmPassword)return setRegErr("Passwords do not match.");
+    if(reg.password.length<4)return setRegErr("Password must be at least 4 characters.");
+    const users=LS.get("users")||[];
+    if(users.find(u=>u.username===reg.username.trim()))return setRegErr("That username is already taken. Please choose another.");
+    const newUser={id:uid(),role:ROLES.DRIVER,name:reg.name.trim(),driverID:reg.driverID.trim(),username:reg.username.trim(),password:reg.password,email:"",status:"pending",createdAt:today()};
+    LS.set("users",[...users,newUser]);
+    setRegOk(true);setReg({name:"",driverID:"",username:"",password:"",confirmPassword:""});
+  };
+
+  const Logo=()=><div style={{textAlign:"center",marginBottom:26}}>
+    <div style={{width:60,height:60,borderRadius:14,background:C.accent,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:20,color:"#fff",marginBottom:14,boxShadow:"0 4px 16px rgba(232,160,32,0.4)"}}>BYT</div>
+    <div style={{fontSize:21,fontWeight:800,color:C.primary}}>BYT Transport</div>
+    <div style={{fontSize:12,color:C.muted,marginTop:3}}>📍 Kasoa, Ghana &nbsp;•&nbsp; 0557086481</div>
+  </div>;
+
+  return <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1a3a5c 0%,#0f2540 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div style={{background:"#fff",borderRadius:18,padding:"36px 36px 28px",width:"100%",maxWidth:400,boxShadow:"0 24px 64px rgba(0,0,0,0.35)"}}>
+      <Logo/>
+      {/* Tab switcher */}
+      <div style={{display:"flex",borderRadius:9,background:"#f4f6f9",padding:4,marginBottom:22,gap:4}}>
+        {[{id:"login",label:"🔑 Sign In"},{id:"register",label:"📝 Register as Driver"}].map(t=>
+          <button key={t.id} onClick={()=>{setTab(t.id);setErr("");setRegErr("");setRegOk(false);}} style={{flex:1,padding:"8px 0",borderRadius:7,border:"none",cursor:"pointer",fontWeight:tab===t.id?700:400,fontSize:12,background:tab===t.id?"#fff":"transparent",color:tab===t.id?C.primary:C.muted,boxShadow:tab===t.id?"0 1px 4px rgba(0,0,0,0.12)":"none",transition:"all 0.15s"}}>{t.label}</button>)}
       </div>
-      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+
+      {tab==="login"&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
         <Inp label="Username" value={u} onChange={setU} ph="Enter your username" req/>
         <div style={{display:"flex",flexDirection:"column",gap:5}}>
           <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Password <span style={{color:C.danger}}>*</span></label>
@@ -255,14 +285,37 @@ function Login({onLogin}){
           </div>
         </div>
         {err&&<Alert type="danger">{err}</Alert>}
-        <button onClick={go} style={{background:C.primary,color:"#fff",border:"none",borderRadius:9,padding:12,fontSize:14,fontWeight:700,cursor:"pointer",marginTop:4,boxShadow:"0 4px 12px rgba(26,58,92,0.3)"}}>Sign In →</button>
-      </div>
-      <div style={{marginTop:20,padding:"12px 14px",background:"#f4f6f9",borderRadius:9,fontSize:11,color:C.muted}}>
-        <div style={{fontWeight:600,marginBottom:6}}>Default login credentials:</div>
-        <div>👑 GM: <code>gm</code> / <code>gm2024</code></div>
-        <div>🔧 Ops: <code>ops</code> / <code>ops2024</code></div>
-        <div>🚐 Driver: <code>kwame</code> / <code>drv2024</code></div>
-      </div>
+        <button onClick={go} style={{background:C.primary,color:"#fff",border:"none",borderRadius:9,padding:12,fontSize:14,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 12px rgba(26,58,92,0.3)"}}>Sign In →</button>
+        <div style={{padding:"12px 14px",background:"#f4f6f9",borderRadius:9,fontSize:11,color:C.muted}}>
+          <div style={{fontWeight:600,marginBottom:5}}>Staff credentials:</div>
+          <div>👑 GM: <code>gm</code> / <code>gm2024</code></div>
+          <div>🔧 Ops: <code>ops</code> / <code>ops2024</code></div>
+        </div>
+      </div>}
+
+      {tab==="register"&&<div style={{display:"flex",flexDirection:"column",gap:13}}>
+        {regOk?<div style={{textAlign:"center",padding:"20px 0"}}>
+          <div style={{fontSize:40,marginBottom:12}}>✅</div>
+          <div style={{fontSize:16,fontWeight:700,color:C.success,marginBottom:8}}>Registration Submitted!</div>
+          <div style={{fontSize:13,color:C.muted,lineHeight:1.6}}>Your account is <b>pending approval</b> by the General Manager. You will be able to log in once your account is approved.</div>
+          <button onClick={()=>{setRegOk(false);setTab("login");}} style={{marginTop:18,background:C.primary,color:"#fff",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Back to Sign In</button>
+        </div>:<>
+          <Alert type="info">Fill in your details below. Your account will be reviewed and approved by the General Manager before you can log in.</Alert>
+          <Inp label="Full Name" value={reg.name} onChange={rf("name")} req ph="Your full name"/>
+          <Inp label="Driver ID (if assigned)" value={reg.driverID} onChange={rf("driverID")} ph="e.g. DRV-106 (leave blank if unknown)"/>
+          <Inp label="Choose Username" value={reg.username} onChange={rf("username")} req ph="Your login username"/>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
+            <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Password <span style={{color:C.danger}}>*</span></label>
+            <div style={{position:"relative"}}>
+              <input type={showReg?"text":"password"} value={reg.password} onChange={e=>rf("password")(e.target.value)} placeholder="Min. 4 characters" style={{width:"100%",padding:"8px 38px 8px 10px",borderRadius:7,border:`1px solid ${C.border}`,fontSize:13}}/>
+              <button onClick={()=>setShowReg(s=>!s)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,fontSize:14,cursor:"pointer"}}>{showReg?"🙈":"👁"}</button>
+            </div>
+          </div>
+          <Inp label="Confirm Password" value={reg.confirmPassword} onChange={rf("confirmPassword")} type="password" req ph="Repeat your password"/>
+          {regErr&&<Alert type="danger">{regErr}</Alert>}
+          <button onClick={register} style={{background:C.success,color:"#fff",border:"none",borderRadius:9,padding:12,fontSize:14,fontWeight:700,cursor:"pointer"}}>Submit Registration →</button>
+        </>}
+      </div>}
     </div>
   </div>;
 }
@@ -349,7 +402,7 @@ function GMPortal({user,onLogout}){
   ];
 
   const pages={
-    dashboard:<GMDashboard user={user} drivers={drivers} carInfo={carInfo} driverSales={driverSales} opsSales={opsSales} parts={parts} oil={oil} insurance={insurance} logs={logs} payments={payments}/>,
+    dashboard:<GMDashboard user={user} users={users} drivers={drivers} carInfo={carInfo} driverSales={driverSales} opsSales={opsSales} parts={parts} oil={oil} insurance={insurance} logs={logs} payments={payments}/>,
     finance:<GMFinance driverSales={driverSales} opsSales={opsSales} parts={parts} oil={oil} payments={payments}/>,
     fleet:<GMFleet carInfo={carInfo} drivers={drivers} insurance={insurance}/>,
     drivers:<GMDrivers drivers={drivers} carInfo={carInfo} driverSales={driverSales}/>,
@@ -367,7 +420,7 @@ function GMPortal({user,onLogout}){
   </Shell>;
 }
 
-function GMDashboard({drivers,carInfo,driverSales,opsSales,parts,oil,insurance,logs,payments}){
+function GMDashboard({users,drivers,carInfo,driverSales,opsSales,parts,oil,insurance,logs,payments}){
   const thisWeek=WEEKS[0];
   const weekSales=driverSales.filter(s=>s.week===thisWeek);
   const totalRev=weekSales.reduce((a,b)=>a+Number(b.amount||0),0);
@@ -380,22 +433,24 @@ function GMDashboard({drivers,carInfo,driverSales,opsSales,parts,oil,insurance,l
   const soonIns=insurance.filter(i=>expiryStatus(i.expiryDate)==="Expiring Soon").length;
   const openLogs=logs.filter(l=>l.status==="Open").length;
   const expRW=carInfo.filter(c=>expiryStatus(c.roadworthyExpiry)==="Expired"||expiryStatus(c.roadworthyExpiry)==="Expiring Soon").length;
+  const pendingApprovals=(users||[]).filter(u=>u.status==="pending").length;
 
   return <div className="fade">
     <PageTitle title="General Manager Dashboard" sub={`${new Date().toDateString()} — ${thisWeek}`}/>
+    {pendingApprovals>0&&<Alert type="warn"><b>{pendingApprovals} driver{pendingApprovals>1?"s":""}</b> ha{pendingApprovals>1?"ve":"s"} self-registered and {pendingApprovals>1?"are":"is"} awaiting your approval. Go to <b>User Management</b> to review.</Alert>}
     {(expIns>0||soonIns>0||openLogs>0||expRW>0)&&<Alert type="warn">
       {expIns>0&&<span><b>{expIns}</b> expired insurance. </span>}
       {soonIns>0&&<span><b>{soonIns}</b> insurance expiring soon. </span>}
       {openLogs>0&&<span><b>{openLogs}</b> open incidents. </span>}
-      {expRW>0&&<span><b>{expRW}</b> roadworthy certificates expired/expiring soon.</span>}
+      {expRW>0&&<span><b>{expRW}</b> roadworthy expired/expiring.</span>}
     </Alert>}
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))",gap:14,marginBottom:22}}>
       <Metric label="Total Drivers" value={drivers.length} sub="Active fleet drivers"/>
       <Metric label="Week Revenue" value={GHC(totalRev)} sub={`${weekSales.length} submissions`} color="#e9f5ee"/>
       <Metric label="Week Expenses" value={GHC(totalOut)} sub="Oil + Parts + Payments" color="#fceaea"/>
       <Metric label="Net Profit" value={GHC(net)} sub="This week" color={net>=0?"#e9f5ee":"#fceaea"}/>
+      <Metric label="Pending Approvals" value={pendingApprovals} sub="Awaiting review" color={pendingApprovals>0?C.wBg:"#f4f6f9"}/>
       <Metric label="Open Issues" value={openLogs} sub="Incidents/accidents" color={openLogs>0?C.wBg:"#f4f6f9"}/>
-      <Metric label="Fleet Cars" value={carInfo.length} sub="Registered vehicles"/>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18}}>
       <Card>
@@ -508,38 +563,92 @@ function GMDrivers({drivers,carInfo,driverSales}){
 }
 
 function GMUsers({users,saveUsers,currentUser}){
-  const [M,setM]=useState(null),[del,setDel]=useState(null),[err,setErr]=useState("");
+  const [M,setM]=useState(null),[del,setDel]=useState(null),[err,setErr]=useState(""),[suspendID,setSuspendID]=useState(null);
   const blank={role:ROLES.DRIVER,username:"",password:"",name:"",driverID:"",email:""};
   const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+
+  const pending=users.filter(u=>u.status==="pending");
+
+  const approve=id=>{saveUsers(users.map(u=>u.id===id?{...u,status:"active",approvedAt:today(),approvedBy:currentUser.id}:u));};
+  const reject=id=>{saveUsers(users.filter(u=>u.id!==id));};
+  const suspend=id=>{saveUsers(users.map(u=>u.id===id?{...u,status:"suspended",suspendedAt:today()}:u));setSuspendID(null);};
+  const reinstate=id=>{saveUsers(users.map(u=>u.id===id?{...u,status:"active",suspendedAt:null}:u));};
+  const remove=id=>{saveUsers(users.filter(u=>u.id!==id));setDel(null);};
+
   const save=()=>{
     const d=M.data;
     if(!d.username||!d.password||!d.name)return setErr("Name, username and password are required.");
     if(M.mode==="add"){
       const exists=users.find(u=>u.username===d.username.trim());
-      if(exists)return setErr("Username already exists.");
-      saveUsers([...users,{...d,id:uid(),username:d.username.trim(),createdAt:today()}]);
+      if(exists)return setErr("Username already taken.");
+      saveUsers([...users,{...d,id:uid(),username:d.username.trim(),status:"active",createdAt:today()}]);
     }else{
-      saveUsers(users.map(u=>u.id===M.data.id?{...d,id:M.data.id}:u));
+      saveUsers(users.map(u=>u.id===M.data.id?{...d,id:M.data.id,status:u.status||"active"}:u));
     }
     setM(null);setErr("");
   };
-  const remove=id=>{saveUsers(users.filter(u=>u.id!==id));setDel(null);};
+
+  const statusBadge=u=>{
+    const s=u.status||"active";
+    if(s==="pending")return <Bdg label="Pending Approval" color={C.wTx} bg={C.wBg} border={C.wBd}/>;
+    if(s==="suspended")return <Bdg label="Suspended" color={C.danger} bg={C.dBg} border="#f5b0b0"/>;
+    return <Bdg label="Active" color={C.success} bg={C.sBg} border="#aedcc2"/>;
+  };
 
   const roleGroups=[{role:ROLES.GM,label:"General Managers",icon:"👑"},{role:ROLES.OPS,label:"Operational Managers",icon:"🔧"},{role:ROLES.DRIVER,label:"Drivers",icon:"🚐"}];
 
   return <div className="fade">
-    <PageTitle title="User Management" sub="Add, edit, or remove system users and their credentials"
+    <PageTitle title="User Management" sub="Approve registrations, manage accounts and credentials"
       action={<Btn onClick={()=>{setErr("");setM({mode:"add",data:{...blank}});}}>+ Add User</Btn>}/>
+
+    {/* PENDING APPROVALS */}
+    {pending.length>0&&<Card style={{marginBottom:20,border:`2px solid ${C.wBd}`,background:C.wBg}}>
+      <SectionTitle title={`⏳ Pending Driver Registrations (${pending.length})`}/>
+      <Alert type="warn">The following drivers have self-registered and are awaiting your approval before they can log in.</Alert>
+      <table><TH cols={["Name","Driver ID","Username","Registered","Actions"]}/>
+      <tbody>{pending.map((u,i)=><TR key={i} cells={[
+        <b>{u.name}</b>,
+        u.driverID||<span style={{color:C.muted,fontSize:11}}>Not provided</span>,
+        <span style={{fontFamily:"monospace"}}>{u.username}</span>,
+        u.createdAt||"—",
+        <div style={{display:"flex",gap:6}}>
+          <Btn sm v="success" onClick={()=>approve(u.id)}>✓ Approve</Btn>
+          <Btn sm v="ghost" danger onClick={()=>reject(u.id)}>✕ Reject</Btn>
+        </div>
+      ]}/>)}</tbody></table>
+    </Card>}
+
+    {/* ACTIVE & SUSPENDED USERS */}
     {roleGroups.map(({role,label,icon})=>{
-      const group=users.filter(u=>u.role===role);
+      const group=users.filter(u=>u.role===role&&u.status!=="pending");
       return <Card key={role} style={{marginBottom:18}}>
         <SectionTitle title={`${icon} ${label} (${group.length})`}/>
-        {group.length===0?<p style={{fontSize:13,color:C.muted}}>No {label.toLowerCase()} yet.</p>:
-        <table><TH cols={["Name",role===ROLES.DRIVER?"Driver ID":"","Username","Email","Added","Actions"]}/>
-        <tbody>{group.map((u,i)=><TR key={i} cells={[<b>{u.name}</b>,role===ROLES.DRIVER?<span style={{fontFamily:"monospace",fontSize:12}}>{u.driverID||"—"}</span>:"",u.username,u.email||"—",u.createdAt||"—",
-          u.id!==currentUser.id?<ActBtns onEdit={()=>{setErr("");setM({mode:"edit",data:{...u}});}} onDel={()=>setDel(u.id)}/>:<span style={{fontSize:11,color:C.muted}}>You</span>]}/>)}</tbody></table>}
+        {group.length===0
+          ?<p style={{fontSize:13,color:C.muted}}>No {label.toLowerCase()} yet.</p>
+          :<table><TH cols={["Name",role===ROLES.DRIVER?"Driver ID":"","Username","Status","Added","Actions"]}/>
+          <tbody>{group.map((u,i)=>{
+            const isSuspended=(u.status||"active")==="suspended";
+            return <TR key={i} cells={[
+              <b>{u.name}</b>,
+              role===ROLES.DRIVER?<span style={{fontFamily:"monospace",fontSize:12}}>{u.driverID||"—"}</span>:"",
+              u.username,
+              statusBadge(u),
+              u.createdAt||"—",
+              u.id!==currentUser.id
+                ?<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  <Btn sm v="outline" onClick={()=>{setErr("");setM({mode:"edit",data:{...u}});}}>✏️ Edit</Btn>
+                  {isSuspended
+                    ?<Btn sm v="success" onClick={()=>reinstate(u.id)}>↩ Reinstate</Btn>
+                    :<Btn sm v="ghost" onClick={()=>setSuspendID(u.id)}>⏸ Suspend</Btn>}
+                  <Btn sm v="ghost" danger onClick={()=>setDel(u.id)}>🗑️ Delete</Btn>
+                </div>
+                :<span style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>Your account</span>
+            ]}/>;
+          })}</tbody></table>}
       </Card>;
     })}
+
+    {/* Add/Edit Modal */}
     {M&&<Modal title={M.mode==="add"?"Add New User":"Edit User"} onClose={()=>setM(null)}>
       {err&&<Alert type="danger">{err}</Alert>}
       <FormGrid>
@@ -552,7 +661,19 @@ function GMUsers({users,saveUsers,currentUser}){
       </FormGrid>
       <FormFooter onCancel={()=>setM(null)} onSave={save}/>
     </Modal>}
-    {del&&<ConfirmDel msg="This user account will be permanently deleted. Their submitted data will remain." onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
+
+    {/* Suspend confirm */}
+    {suspendID&&<Modal title="Suspend Account?" onClose={()=>setSuspendID(null)}>
+      <p style={{fontSize:13,color:C.muted,marginBottom:8,lineHeight:1.6}}>This driver will be <b>immediately logged out</b> and unable to sign in until reinstated. All their submitted data will be kept.</p>
+      <Alert type="warn">You can reinstate the account at any time from this page.</Alert>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:16}}>
+        <Btn v="ghost" onClick={()=>setSuspendID(null)}>Cancel</Btn>
+        <Btn danger onClick={()=>suspend(suspendID)}>⏸ Suspend Account</Btn>
+      </div>
+    </Modal>}
+
+    {/* Delete confirm */}
+    {del&&<ConfirmDel msg="This will permanently delete the user account. Their submitted data (sales, car info) will remain on record." onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
   </div>;
 }
 
