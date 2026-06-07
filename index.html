@@ -308,12 +308,7 @@ function Login({onLogin,brand}){
           </div>
         </div>
         {err&&<Alert type="danger">{err}</Alert>}
-        <button onClick={go} style={{background:C.primary,color:"#fff",border:"none",borderRadius:9,padding:12,fontSize:14,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 12px rgba(26,58,92,0.3)"}}>Sign In →</button>
-        <div style={{padding:"12px 14px",background:"#f4f6f9",borderRadius:9,fontSize:11,color:C.muted}}>
-          <div style={{fontWeight:600,marginBottom:5}}>Staff credentials:</div>
-          <div>👑 GM: <code>gm</code> / <code>gm2024</code></div>
-          <div>🔧 Ops: <code>ops</code> / <code>ops2024</code></div>
-        </div>
+        <button onClick={go} style={{background:B.primaryColor,color:"#fff",border:"none",borderRadius:9,padding:12,fontSize:14,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 12px rgba(26,58,92,0.3)"}}>Sign In →</button>
       </div>}
 
       {tab==="register"&&<div style={{display:"flex",flexDirection:"column",gap:13}}>
@@ -401,11 +396,15 @@ function Shell({user,onLogout,children,nav,activePage,setPage,brand}){
 /* ═══════════════════════════════════════
    GM SETTINGS PAGE
 ═══════════════════════════════════════ */
-function GMSettings({brand,onSave}){
+function GMSettings({brand,onSave,currentUser}){
   const [f,setF]=useState({...brand});
   const [tab,setTab]=useState("branding");
   const [saved,setSaved]=useState(false);
+  const [credSaved,setCredSaved]=useState(false);
+  const [creds,setCreds]=useState({currentPassword:"",newPassword:"",confirmPassword:""});
+  const [credErr,setCredErr]=useState("");
   const set=k=>v=>setF(p=>({...p,[k]:v}));
+  const cf=k=>v=>setCreds(p=>({...p,[k]:v}));
 
   const upload=(key,maxKB)=>e=>{
     const file=e.target.files[0];if(!file)return;
@@ -420,7 +419,21 @@ function GMSettings({brand,onSave}){
     onSave(f);setSaved(true);setTimeout(()=>setSaved(false),3000);
   };
 
-  const TABS=[{id:"branding",label:"🎨 Logo & Branding"},{id:"backgrounds",label:"🖼️ Backgrounds"},{id:"contact",label:"📍 Contact Info"}];
+  const saveCreds=()=>{
+    setCredErr("");
+    const users=LS.get("users")||[];
+    const me=users.find(u=>u.id===currentUser.id);
+    if(!me)return setCredErr("Could not find your account.");
+    if(creds.currentPassword!==me.password)return setCredErr("Current password is incorrect.");
+    if(!creds.newPassword||creds.newPassword.length<4)return setCredErr("New password must be at least 4 characters.");
+    if(creds.newPassword!==creds.confirmPassword)return setCredErr("New passwords do not match.");
+    const updated=users.map(u=>u.id===me.id?{...u,password:creds.newPassword}:u);
+    LS.set("users",updated);
+    setCreds({currentPassword:"",newPassword:"",confirmPassword:""});
+    setCredSaved(true);setTimeout(()=>setCredSaved(false),3000);
+  };
+
+  const TABS=[{id:"branding",label:"🎨 Logo & Branding"},{id:"backgrounds",label:"🖼️ Backgrounds"},{id:"contact",label:"📍 Contact Info"},{id:"credentials",label:"🔐 My Credentials"}];
 
   const ColorPicker=({label,k})=>(
     <div style={{display:"flex",flexDirection:"column",gap:6}}>
@@ -519,12 +532,32 @@ function GMSettings({brand,onSave}){
       </FormGrid>
     </Card>}
 
-    {/* Save bar */}
-    <div style={{display:"flex",gap:12,alignItems:"center",marginTop:22}}>
+    {/* CREDENTIALS TAB */}
+    {tab==="credentials"&&<Card>
+      <SectionTitle title="Change My Login Credentials"/>
+      <p style={{fontSize:13,color:C.muted,marginBottom:18}}>Update the username and password you use to access the General Manager portal.</p>
+      <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:400}}>
+        <Inp label="Current Username" value={currentUser?.username||""} readOnly hint="Username cannot be changed here — use User Management to edit it."/>
+        <Inp label="Current Password" value={creds.currentPassword} onChange={cf("currentPassword")} type="password" req ph="Enter your current password"/>
+        <Inp label="New Password" value={creds.newPassword} onChange={cf("newPassword")} type="password" req ph="Min. 4 characters"/>
+        <Inp label="Confirm New Password" value={creds.confirmPassword} onChange={cf("confirmPassword")} type="password" req ph="Repeat new password"/>
+        {credErr&&<Alert type="danger">{credErr}</Alert>}
+        <div style={{display:"flex",gap:12,alignItems:"center"}}>
+          <button onClick={saveCreds} style={{background:C.primary,color:"#fff",border:"none",borderRadius:9,padding:"10px 22px",fontSize:13,fontWeight:700,cursor:"pointer"}}>🔐 Update Password</button>
+          {credSaved&&<span style={{fontSize:13,color:C.success,fontWeight:700}}>✓ Password updated!</span>}
+        </div>
+      </div>
+      <div style={{marginTop:24,padding:"12px 14px",background:C.wBg,border:`1px solid ${C.wBd}`,borderRadius:9,fontSize:12,color:C.wTx}}>
+        ⚠️ Write down your new password before saving. To change your <b>username</b>, go to <b>User Management</b> and edit your account there.
+      </div>
+    </Card>}
+
+    {/* Save bar — only shown on non-credentials tabs */}
+    {tab!=="credentials"&&<div style={{display:"flex",gap:12,alignItems:"center",marginTop:22}}>
       <button onClick={save} style={{background:C.primary,color:"#fff",border:"none",borderRadius:9,padding:"11px 28px",fontSize:14,fontWeight:700,cursor:"pointer",boxShadow:"0 4px 12px rgba(26,58,92,0.2)"}}>💾 Save Changes</button>
       <button onClick={()=>setF({...DEFAULT_BRAND})} style={{background:"#fff",color:C.muted,border:`1px solid ${C.border}`,borderRadius:9,padding:"11px 18px",fontSize:13,cursor:"pointer"}}>Reset to Defaults</button>
       {saved&&<span style={{fontSize:13,color:C.success,fontWeight:700}}>✓ Settings saved! Changes are live.</span>}
-    </div>
+    </div>}
   </div>;
 }
 
@@ -576,7 +609,7 @@ function GMPortal({user,onLogout,brand,onBrandUpdate}){
     oil:<GMOil oil={oil}/>,
     payments:<GMPayments payments={payments}/>,
     logs:<GMLogs logs={logs}/>,
-    settings:<GMSettings brand={brand} onSave={onBrandUpdate}/>,
+    settings:<GMSettings brand={brand} onSave={onBrandUpdate} currentUser={user}/>,
   };
 
   return <Shell user={user} onLogout={onLogout} nav={nav} activePage={page} setPage={setPage} brand={brand}>
