@@ -609,6 +609,7 @@ function GMPortal({user,onLogout,brand,onBrandUpdate}){
   const {data:insurance,save:saveIns,add:addIns,update:updateIns,remove:removeIns}=useData("insurance");
   const {data:logs,save:saveLogs,add:addLog,update:updateLog,remove:removeLog}=useData("logs");
   const {data:payments,save:savePayments,add:addPayment,update:updatePayment,remove:removePayment}=useData("payments");
+  const {data:salaries,add:addSalary,update:updateSalary,remove:removeSalary}=useData("salaries");
 
   const drivers=users.filter(u=>u.role===ROLES.DRIVER);
 
@@ -630,13 +631,15 @@ function GMPortal({user,onLogout,brand,onBrandUpdate}){
     {section:true,label:"DRIVER MATTERS"},
     {id:"drvissues",icon:"🚨",label:"Driver Issue Log"},
     {id:"complaints",icon:"💬",label:"Complaints & Reports"},
+    {section:true,label:"PAYROLL"},
+    {id:"salaries",icon:"💵",label:"Driver Salaries"},
     {section:true,label:"ADMIN"},
     {id:"settings",icon:"⚙️",label:"App Settings"},
   ];
 
   const pages={
-    dashboard:<GMDashboard user={user} users={users} drivers={drivers} carInfo={carInfo} driverSales={driverSales} driverExpenses={driverExpenses} opsSales={opsSales} parts={parts} oil={oil} insurance={insurance} logs={logs} payments={payments}/>,
-    finance:<GMFinance driverSales={driverSales} driverExpenses={driverExpenses} opsSales={opsSales} parts={parts} oil={oil} payments={payments}/>,
+    dashboard:<GMDashboard user={user} users={users} drivers={drivers} carInfo={carInfo} driverSales={driverSales} driverExpenses={driverExpenses} opsSales={opsSales} parts={parts} oil={oil} insurance={insurance} logs={logs} payments={payments} salaries={salaries}/>,
+    finance:<GMFinance driverSales={driverSales} driverExpenses={driverExpenses} opsSales={opsSales} parts={parts} oil={oil} payments={payments} salaries={salaries}/>,
     fleet:<GMFleet carInfo={carInfo} saveCarInfo={saveCarInfo} drivers={drivers} insurance={insurance}/>,
     drivers:<GMDrivers drivers={drivers} carInfo={carInfo} driverSales={driverSales} driverExpenses={driverExpenses}/>,
     users:<GMUsers users={users} saveUsers={saveUsers} currentUser={user}/>,
@@ -649,6 +652,7 @@ function GMPortal({user,onLogout,brand,onBrandUpdate}){
     oplogs:<OpsLogs logs={logs} addLog={addLog} updateLog={updateLog} removeLog={removeLog} carInfo={carInfo} user={user}/>,
     drvissues:<GMIssueLogFull/>,
     complaints:<GMComplaintsOversight/>,
+    salaries:<GMSalaries drivers={drivers} salaries={salaries} addSalary={addSalary} updateSalary={updateSalary} removeSalary={removeSalary}/>,
     settings:<GMSettings brand={brand} onSave={onBrandUpdate} currentUser={user}/>,
   };
 
@@ -657,7 +661,7 @@ function GMPortal({user,onLogout,brand,onBrandUpdate}){
   </Shell>;
 }
 
-function GMDashboard({users,drivers,carInfo,driverSales,driverExpenses,opsSales,parts,oil,insurance,logs,payments}){
+function GMDashboard({users,drivers,carInfo,driverSales,driverExpenses,opsSales,parts,oil,insurance,logs,payments,salaries}){
   const thisWeek=WEEKS[0];
   const weekSales=driverSales.filter(s=>s.week===thisWeek);
   const totalRev=weekSales.reduce((a,b)=>a+Number(b.amount||0),0);
@@ -665,7 +669,8 @@ function GMDashboard({users,drivers,carInfo,driverSales,driverExpenses,opsSales,
   const totalParts=parts.filter(p=>p.week===thisWeek).reduce((a,b)=>a+Number(b.total||0),0);
   const totalPay=payments.filter(p=>p.week===thisWeek).reduce((a,b)=>a+Number(b.amount||0),0);
   const totalDrvExp=(driverExpenses||[]).filter(e=>e.week===thisWeek).reduce((a,b)=>a+Number(b.amount||0),0);
-  const totalOut=totalOil+totalParts+totalPay+totalDrvExp;
+  const totalSalaries=(salaries||[]).filter(s=>s.week===thisWeek).reduce((a,b)=>a+Number(b.amount||0),0);
+  const totalOut=totalOil+totalParts+totalPay+totalDrvExp+totalSalaries;
   const net=totalRev-totalOut;
   const expIns=insurance.filter(i=>expiryStatus(i.expiryDate)==="Expired").length;
   const soonIns=insurance.filter(i=>expiryStatus(i.expiryDate)==="Expiring Soon").length;
@@ -685,7 +690,7 @@ function GMDashboard({users,drivers,carInfo,driverSales,driverExpenses,opsSales,
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))",gap:14,marginBottom:22}}>
       <Metric label="Total Drivers" value={drivers.length} sub="Active fleet drivers"/>
       <Metric label="Week Revenue" value={GHC(totalRev)} sub={`${weekSales.length} submissions`} color="#e9f5ee"/>
-      <Metric label="Week Expenses" value={GHC(totalOut)} sub="Oil + Parts + Payments + Driver Exp." color="#fceaea"/>
+      <Metric label="Week Expenses" value={GHC(totalOut)} sub="Oil + Parts + Pay + Drv Exp + Salaries" color="#fceaea"/>
       <Metric label="Net Profit" value={GHC(net)} sub="This week" color={net>=0?"#e9f5ee":"#fceaea"}/>
       <Metric label="Pending Approvals" value={pendingApprovals} sub="Awaiting review" color={pendingApprovals>0?C.wBg:"#f4f6f9"}/>
       <Metric label="Open Issues" value={openLogs} sub="Incidents/accidents" color={openLogs>0?C.wBg:"#f4f6f9"}/>
@@ -709,7 +714,7 @@ function GMDashboard({users,drivers,carInfo,driverSales,driverExpenses,opsSales,
   </div>;
 }
 
-function GMFinance({driverSales,driverExpenses,opsSales,parts,oil,payments}){
+function GMFinance({driverSales,driverExpenses,opsSales,parts,oil,payments,salaries}){
   const bRef=useRef(),charts=useRef({});
   const wks=WEEKS.slice(0,8).reverse();
   const wd=wks.map(wk=>({
@@ -718,14 +723,15 @@ function GMFinance({driverSales,driverExpenses,opsSales,parts,oil,payments}){
     pts:parts.filter(p=>p.week===wk).reduce((a,b)=>a+Number(b.total||0),0),
     pay:payments.filter(p=>p.week===wk).reduce((a,b)=>a+Number(b.amount||0),0),
     drvExp:(driverExpenses||[]).filter(e=>e.week===wk).reduce((a,b)=>a+Number(b.amount||0),0),
+    sal:(salaries||[]).filter(s=>s.week===wk).reduce((a,b)=>a+Number(b.amount||0),0),
   }));
   const labs=wks.map(w=>w.replace(/\d{4}/,"").trim());
   useEffect(()=>{
     Object.values(charts.current).forEach(c=>c?.destroy());
-    if(bRef.current){charts.current.b=new Chart(bRef.current,{type:"bar",data:{labels:labs,datasets:[{label:"Revenue",data:wd.map(d=>d.rev),backgroundColor:"rgba(26,122,74,0.8)",borderRadius:4},{label:"Total Out",data:wd.map(d=>d.oil+d.pts+d.pay),backgroundColor:"rgba(185,48,48,0.75)",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"top"}},scales:{y:{beginAtZero:true,ticks:{callback:v=>"GH₵"+v.toLocaleString()}},x:{grid:{display:false}}}}});}
+    if(bRef.current){charts.current.b=new Chart(bRef.current,{type:"bar",data:{labels:labs,datasets:[{label:"Revenue",data:wd.map(d=>d.rev),backgroundColor:"rgba(26,122,74,0.8)",borderRadius:4},{label:"Total Out",data:wd.map(d=>d.oil+d.pts+d.pay+d.drvExp+d.sal),backgroundColor:"rgba(185,48,48,0.75)",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"top"}},scales:{y:{beginAtZero:true,ticks:{callback:v=>"GH₵"+v.toLocaleString()}},x:{grid:{display:false}}}}});}
     return()=>Object.values(charts.current).forEach(c=>c?.destroy());
   },[JSON.stringify(wd)]);
-  const tot=wd.reduce((a,d)=>({rev:a.rev+d.rev,out:a.out+d.oil+d.pts+d.pay+d.drvExp}),{rev:0,out:0});
+  const tot=wd.reduce((a,d)=>({rev:a.rev+d.rev,out:a.out+d.oil+d.pts+d.pay+d.drvExp+d.sal}),{rev:0,out:0});
   return <div className="fade">
     <PageTitle title="Financial Overview" sub="Revenue and expenses across all weeks"/>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))",gap:14,marginBottom:22}}>
@@ -739,8 +745,8 @@ function GMFinance({driverSales,driverExpenses,opsSales,parts,oil,payments}){
     </Card>
     <Card>
       <SectionTitle title="Weekly Breakdown"/>
-      <div style={{overflowX:"auto"}}><table><TH cols={["Week","Revenue","Oil","Parts","Payments","Driver Exp.","Total Out","Net"]}/>
-      <tbody>{wd.slice().reverse().map((d,i)=>{const o=d.oil+d.pts+d.pay+d.drvExp,n=d.rev-o;return<TR key={i} cells={[d.wk,<span style={{color:C.success,fontWeight:600}}>{GHC(d.rev)}</span>,GHC(d.oil),GHC(d.pts),GHC(d.pay),GHC(d.drvExp),<span style={{color:C.danger,fontWeight:600}}>{GHC(o)}</span>,<span style={{color:n>=0?C.success:C.danger,fontWeight:700}}>{GHC(n)}</span>]}/>;})}</tbody></table></div>
+      <div style={{overflowX:"auto"}}><table><TH cols={["Week","Revenue","Oil","Parts","Payments","Driver Exp.","Salaries","Total Out","Net"]}/>
+      <tbody>{wd.slice().reverse().map((d,i)=>{const o=d.oil+d.pts+d.pay+d.drvExp+d.sal,n=d.rev-o;return<TR key={i} cells={[d.wk,<span style={{color:C.success,fontWeight:600}}>{GHC(d.rev)}</span>,GHC(d.oil),GHC(d.pts),GHC(d.pay),GHC(d.drvExp),GHC(d.sal),<span style={{color:C.danger,fontWeight:600}}>{GHC(o)}</span>,<span style={{color:n>=0?C.success:C.danger,fontWeight:700}}>{GHC(n)}</span>]}/>;})}</tbody></table></div>
     </Card>
   </div>;
 }
@@ -1122,6 +1128,7 @@ function OpsPortal({user,onLogout,brand}){
     {id:"logs",icon:"📝",label:"Report / Issue Log"},
     {section:true,label:"DRIVER MANAGEMENT"},
     {id:"drvsubmissions",icon:"📋",label:"Driver Submissions"},
+    {id:"drvexpenses",icon:"🧾",label:"Driver Expenses"},
     {id:"drvissues",icon:"🚨",label:"Driver Issue Log"},
     {id:"complaints",icon:"💬",label:"Complaints Review"},
   ];
@@ -1135,6 +1142,7 @@ function OpsPortal({user,onLogout,brand}){
     payments:<OpsPayments payments={payments} addPayment={addPayment} updatePayment={updatePayment} removePayment={removePayment} user={user}/>,
     logs:<OpsLogs logs={logs} addLog={addLog} updateLog={updateLog} removeLog={removeLog} carInfo={carInfo} user={user}/>,
     drvsubmissions:<OpsDriverSubmissions drivers={drivers} carInfo={carInfo} saveCarInfo={saveCarInfo} driverSales={driverSales} saveDriverSales={saveDrvSales} driverExpenses={driverExpenses} saveDrvExp={saveDrvExp} user={user}/>,
+    drvexpenses:<OpsDriverExpensesView driverExpenses={driverExpenses} drivers={drivers} carInfo={carInfo}/>,
     drvissues:<OpsIssueReview carInfo={carInfo}/>,
     complaints:<OpsComplaintsReview user={user}/>,
   };
@@ -1144,24 +1152,43 @@ function OpsPortal({user,onLogout,brand}){
   </Shell>;
 }
 
-function OpsDashboard({driverSales,parts,oil,payments,insurance,logs,carInfo}){
+function OpsDashboard({driverSales,driverExpenses,parts,oil,payments,insurance,logs,carInfo}){
   const wk=WEEKS[0];
   const rev=driverSales.filter(s=>s.week===wk).reduce((a,b)=>a+Number(b.amount||0),0);
   const tO=oil.filter(o=>o.week===wk).reduce((a,b)=>a+Number(b.total||0),0);
   const tP=parts.filter(p=>p.week===wk).reduce((a,b)=>a+Number(b.total||0),0);
   const tPy=payments.filter(p=>p.week===wk).reduce((a,b)=>a+Number(b.amount||0),0);
+  const tDE=(driverExpenses||[]).filter(e=>e.week===wk).reduce((a,b)=>a+Number(b.amount||0),0);
+  const totalOut=tO+tP+tPy+tDE;
+  const net=rev-totalOut;
   const openLogs=logs.filter(l=>l.status==="Open").length;
   const expIns=insurance.filter(i=>expiryStatus(i.expiryDate)==="Expired").length;
   return <div className="fade">
     <PageTitle title="Operations Dashboard" sub={`${WEEKS[0]} — ${new Date().toDateString()}`}/>
     {(expIns>0||openLogs>0)&&<Alert type="warn">{expIns>0&&<span><b>{expIns}</b> expired insurance policies. </span>}{openLogs>0&&<span><b>{openLogs}</b> open incidents awaiting resolution.</span>}</Alert>}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))",gap:14,marginBottom:22}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(148px,1fr))",gap:14,marginBottom:22}}>
       <Metric label="Driver Revenue (Week)" value={GHC(rev)} sub="From driver submissions" color="#e9f5ee"/>
       <Metric label="Oil Cost (Week)" value={GHC(tO)} sub="Fleet oil purchase"/>
       <Metric label="Parts Cost (Week)" value={GHC(tP)} sub="Maintenance & parts"/>
+      <Metric label="Driver Expenses (Week)" value={GHC(tDE)} sub="Fuel, tolls, repairs" color="#fceaea"/>
       <Metric label="Payments (Week)" value={GHC(tPy)} sub="To external parties"/>
+      <Metric label="Net (Week)" value={GHC(net)} sub="Revenue minus all costs" color={net>=0?"#e9f5ee":"#fceaea"}/>
       <Metric label="Open Issues" value={openLogs} color={openLogs>0?C.wBg:"#f4f6f9"} sub="Incidents/accidents"/>
     </div>
+    {/* Weekly financial breakdown */}
+    <Card style={{marginBottom:18}}>
+      <SectionTitle title="Weekly Financial Summary"/>
+      <div style={{overflowX:"auto"}}><table><TH cols={["Week","Revenue","Oil","Parts","Driver Exp.","Payments","Total Out","Net"]}/>
+      <tbody>{WEEKS.slice(0,8).map((w,i)=>{
+        const r=driverSales.filter(s=>s.week===w).reduce((a,b)=>a+Number(b.amount||0),0);
+        const o=oil.filter(x=>x.week===w).reduce((a,b)=>a+Number(b.total||0),0);
+        const p=parts.filter(x=>x.week===w).reduce((a,b)=>a+Number(b.total||0),0);
+        const de=(driverExpenses||[]).filter(e=>e.week===w).reduce((a,b)=>a+Number(b.amount||0),0);
+        const py=payments.filter(x=>x.week===w).reduce((a,b)=>a+Number(b.amount||0),0);
+        const tot=o+p+de+py;const n=r-tot;
+        return <TR key={i} cells={[w,<span style={{color:C.success,fontWeight:600}}>{GHC(r)}</span>,GHC(o),GHC(p),GHC(de),GHC(py),<span style={{color:C.danger,fontWeight:600}}>{GHC(tot)}</span>,<span style={{color:n>=0?C.success:C.danger,fontWeight:700}}>{GHC(n)}</span>]}/>;
+      })}</tbody></table></div>
+    </Card>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18}}>
       <Card>
         <SectionTitle title="Insurance Alerts"/>
@@ -1386,10 +1413,12 @@ function DriverPortal({user,onLogout,brand}){
   const {data:carInfoAll,save:saveCarInfo}=useData("carInfo");
   const {data:salesAll,save:saveSalesAll}=useData("driverSales");
   const {data:expAll,save:saveExpAll}=useData("driverExpenses");
+  const {data:salariesAll}=useData("salaries");
 
   const myCarInfo=carInfoAll.find(c=>c.driverID===user.id)||null;
   const mySales=salesAll.filter(s=>s.driverID===user.id);
   const myExpenses=expAll.filter(e=>e.driverID===user.id);
+  const mySalaries=(salariesAll||[]).filter(s=>s.driverID===user.id);
 
   const saveCarInfoForMe=(newInfo)=>{
     const rest=carInfoAll.filter(c=>c.driverID!==user.id);
@@ -1408,6 +1437,7 @@ function DriverPortal({user,onLogout,brand}){
     {id:"carinfo",icon:"🚐",label:"My Car & Documents"},
     {id:"sales",icon:"💰",label:"My Weekly Sales"},
     {id:"expenses",icon:"🧾",label:"My Expenses"},
+    {id:"salaries",icon:"💵",label:"My Salary History"},
     {section:true,label:"REPORTS"},
     {id:"issues",icon:"⚠️",label:"My Issue Log"},
     {id:"complaints",icon:"📣",label:"Reports & Complaints"},
@@ -1418,6 +1448,7 @@ function DriverPortal({user,onLogout,brand}){
     carinfo:<DriverCarInfo user={user} myCarInfo={myCarInfo} carInfoAll={carInfoAll} onSave={saveCarInfoForMe}/>,
     sales:<DriverSales user={user} mySales={mySales} addSale={addSale} updateSale={updateSale} removeSale={removeSale}/>,
     expenses:<DriverExpenses user={user} myExpenses={myExpenses} myCarInfo={myCarInfo} addExpense={addExpense} updateExpense={updateExpense} removeExpense={removeExpense}/>,
+    salaries:<DriverSalaryHistory mySalaries={mySalaries}/>,
     issues:<DriverIssueLog user={user} myCarInfo={myCarInfo}/>,
     complaints:<DriverComplaints user={user}/>,
   };
@@ -1612,6 +1643,37 @@ function DriverExpenses({user,myExpenses,myCarInfo,addExpense,updateExpense,remo
 ───────────────────────────────────────── */
 // ReceiptUpload is an alias for ReceiptField (defined earlier)
 const ReceiptUpload=ReceiptField;
+
+/* ═══════════════════════════════════════
+   DRIVER — MY SALARY HISTORY
+═══════════════════════════════════════ */
+function DriverSalaryHistory({mySalaries}){
+  const totalNet=(mySalaries||[]).filter(s=>s.type!=="Deduction").reduce((a,b)=>a+Number(b.amount||0),0)
+    -(mySalaries||[]).filter(s=>s.type==="Deduction").reduce((a,b)=>a+Number(b.amount||0),0);
+  const thisWk=(mySalaries||[]).filter(s=>s.week===WEEKS[0]&&s.type!=="Deduction").reduce((a,b)=>a+Number(b.amount||0),0);
+  return <div className="fade">
+    <PageTitle title="My Salary History" sub="Salary payments and deductions recorded by management"/>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:14,marginBottom:20}}>
+      <Metric label="This Week" value={GHC(thisWk)} sub={WEEKS[0]} color="#e9f5ee"/>
+      <Metric label="Net Earned (All Time)" value={GHC(totalNet)} sub="After deductions" color="#e9f5ee"/>
+      <Metric label="Records" value={(mySalaries||[]).length} sub="Payment entries"/>
+    </div>
+    {(mySalaries||[]).length===0&&<Card><Alert type="info">No salary records yet. Your manager records salary payments — check back here after payroll is processed.</Alert></Card>}
+    {(mySalaries||[]).length>0&&<Card>
+      <div style={{overflowX:"auto"}}><table><TH cols={["Week","Type","Amount","Method","Paid Date","Notes"]}/>
+      <tbody>{[...mySalaries].sort((a,b)=>(b.paidDate||"").localeCompare(a.paidDate||"")).map((r,i)=>(
+        <TR key={i} cells={[
+          r.week,
+          <Bdg label={r.type} color={r.type==="Deduction"?C.danger:C.success} bg={r.type==="Deduction"?C.dBg:C.sBg} border={r.type==="Deduction"?"#f5c6c6":"#b5dfc8"}/>,
+          <span style={{color:r.type==="Deduction"?C.danger:C.success,fontWeight:700}}>{r.type==="Deduction"?"-":""}{GHC(r.amount)}</span>,
+          r.method||"Cash",
+          r.paidDate||"—",
+          <span style={{color:C.muted,fontSize:12}}>{r.notes||"—"}</span>
+        ]}/>
+      ))}</tbody></table></div>
+    </Card>}
+  </div>;
+}
 
 /* ═══════════════════════════════════════
    DRIVER ISSUE LOG (driver-facing)
@@ -1909,6 +1971,60 @@ function OpsComplaintsReview({user}){
 }
 
 /* ═══════════════════════════════════════
+   OPS — DRIVER EXPENSES VIEW
+═══════════════════════════════════════ */
+function OpsDriverExpensesView({driverExpenses,drivers,carInfo}){
+  const [filterWk,setFilterWk]=useState("all"),[filterDrv,setFilterDrv]=useState("all");
+  const allWks=[...new Set((driverExpenses||[]).map(e=>e.week))].sort().reverse();
+  const rows=(driverExpenses||[]).filter(e=>(filterWk==="all"||e.week===filterWk)&&(filterDrv==="all"||e.driverID===filterDrv));
+  const tot=rows.reduce((a,b)=>a+Number(b.amount||0),0);
+  const thisWkTot=(driverExpenses||[]).filter(e=>e.week===WEEKS[0]).reduce((a,b)=>a+Number(b.amount||0),0);
+  return <div className="fade">
+    <PageTitle title="Driver Expenses" sub="All vehicle expenses submitted by drivers — fuel, tolls, repairs, etc."/>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:14,marginBottom:20}}>
+      <Metric label="This Week" value={GHC(thisWkTot)} sub={WEEKS[0]} color="#fceaea"/>
+      <Metric label="Filtered Total" value={GHC(tot)} sub={`${rows.length} records`} color="#fceaea"/>
+      <Metric label="All Time" value={GHC((driverExpenses||[]).reduce((a,b)=>a+Number(b.amount||0),0))} sub="Total submitted"/>
+    </div>
+    <Card style={{marginBottom:18}}>
+      <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:160}}>
+          <label style={{fontSize:12,color:C.muted,display:"block",marginBottom:4}}>Filter by Week</label>
+          <select value={filterWk} onChange={e=>setFilterWk(e.target.value)} style={{width:"100%",padding:"7px 10px",borderRadius:7,border:`1px solid ${C.border}`,fontSize:13}}>
+            <option value="all">All Weeks</option>
+            {WEEKS.map(w=><option key={w} value={w}>{w}</option>)}
+          </select>
+        </div>
+        <div style={{flex:1,minWidth:160}}>
+          <label style={{fontSize:12,color:C.muted,display:"block",marginBottom:4}}>Filter by Driver</label>
+          <select value={filterDrv} onChange={e=>setFilterDrv(e.target.value)} style={{width:"100%",padding:"7px 10px",borderRadius:7,border:`1px solid ${C.border}`,fontSize:13}}>
+            <option value="all">All Drivers</option>
+            {drivers.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+        </div>
+      </div>
+    </Card>
+    {rows.length===0&&<Card><Alert type="info">No driver expenses match the selected filter. Drivers submit expenses from their portal.</Alert></Card>}
+    {rows.length>0&&<Card>
+      <div style={{overflowX:"auto"}}><table><TH cols={["Driver","Car","Week","Category","Description","Amount","Date"]}/>
+      <tbody>{[...rows].sort((a,b)=>(b.submittedAt||"").localeCompare(a.submittedAt||"")).map((r,i)=>{
+        const drv=drivers.find(d=>d.id===r.driverID);
+        const car=carInfo.find(c=>c.driverID===r.driverID);
+        return <TR key={i} cells={[
+          <b style={{color:C.primary}}>{drv?.name||"—"}</b>,
+          car?.carNumber||r.carNumber||"—",
+          r.week,
+          <Bdg label={r.category} color={C.info} bg={C.iBg} border="#b5c8f0"/>,
+          r.description||"—",
+          <span style={{color:C.danger,fontWeight:600}}>{GHC(r.amount)}</span>,
+          r.submittedAt||"—"
+        ]}/>;
+      })}</tbody></table></div>
+    </Card>}
+  </div>;
+}
+
+/* ═══════════════════════════════════════
    OPS — DRIVER ISSUE LOG REVIEW
 ═══════════════════════════════════════ */
 function OpsIssueReview({carInfo}){
@@ -2017,6 +2133,106 @@ function GMComplaintsOversight(){
         </div>
       </Card>}
     </div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════
+   GM — DRIVER SALARIES
+═══════════════════════════════════════ */
+function GMSalaries({drivers,salaries,addSalary,updateSalary,removeSalary}){
+  const blank={driverID:"",week:WEEKS[0],amount:"",type:"Monthly",notes:"",paidDate:today(),method:"Cash"};
+  const [M,setM]=useState(null),[del,setDel]=useState(null),[filterDrv,setFilterDrv]=useState("all"),[filterWk,setFilterWk]=useState("all");
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{
+    const d=M.data;
+    if(!d.driverID||!d.amount||!d.week)return alert("Driver, week and amount are required.");
+    const item={...d,amount:Number(d.amount)};
+    if(M.mode==="add")addSalary({...item,id:uid(),createdAt:today()});
+    else updateSalary(M.id,{...item,id:M.id});
+    setM(null);
+  };
+  const allWeeks=[...new Set((salaries||[]).map(s=>s.week))].sort().reverse();
+  const rows=(salaries||[]).filter(s=>(filterDrv==="all"||s.driverID===filterDrv)&&(filterWk==="all"||s.week===filterWk));
+  const totalPaid=rows.reduce((a,b)=>a+Number(b.amount||0),0);
+  const thisWkTotal=(salaries||[]).filter(s=>s.week===WEEKS[0]).reduce((a,b)=>a+Number(b.amount||0),0);
+  const TYPES=["Monthly","Weekly","Advance","Bonus","Deduction","Other"];
+  const METHODS=["Cash","Mobile Money","Bank Transfer","Cheque"];
+  return <div className="fade">
+    <PageTitle title="Driver Salaries" sub="Record and track all driver salary payments"
+      action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Payment</Btn>}/>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:14,marginBottom:20}}>
+      <Metric label="This Week Paid" value={GHC(thisWkTotal)} sub={WEEKS[0]} color="#fceaea"/>
+      <Metric label="Filtered Total" value={GHC(totalPaid)} sub={`${rows.length} records`} color="#fceaea"/>
+      <Metric label="Total Drivers" value={drivers.length} sub="On payroll"/>
+    </div>
+    <Card style={{marginBottom:18}}>
+      <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
+        <div style={{flex:1,minWidth:160}}>
+          <label style={{fontSize:12,color:C.muted,display:"block",marginBottom:4}}>Filter by Driver</label>
+          <select value={filterDrv} onChange={e=>setFilterDrv(e.target.value)} style={{width:"100%",padding:"7px 10px",borderRadius:7,border:`1px solid ${C.border}`,fontSize:13}}>
+            <option value="all">All Drivers</option>
+            {drivers.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+        </div>
+        <div style={{flex:1,minWidth:160}}>
+          <label style={{fontSize:12,color:C.muted,display:"block",marginBottom:4}}>Filter by Week</label>
+          <select value={filterWk} onChange={e=>setFilterWk(e.target.value)} style={{width:"100%",padding:"7px 10px",borderRadius:7,border:`1px solid ${C.border}`,fontSize:13}}>
+            <option value="all">All Weeks</option>
+            {WEEKS.map(w=><option key={w} value={w}>{w}</option>)}
+          </select>
+        </div>
+      </div>
+    </Card>
+    {rows.length===0&&<Card><Alert type="info">No salary records yet. Click <b>+ Add Payment</b> to record a salary payment.</Alert></Card>}
+    {rows.length>0&&<Card>
+      <div style={{overflowX:"auto"}}><table><TH cols={["Driver","Week","Type","Amount","Method","Paid Date","Notes",""]}/>
+      <tbody>{[...rows].sort((a,b)=>b.createdAt?.localeCompare(a.createdAt||"")||0).map((r,i)=>{
+        const drv=drivers.find(d=>d.id===r.driverID);
+        return <TR key={i} cells={[
+          <b style={{color:C.primary}}>{drv?.name||"—"}</b>,
+          r.week,
+          <Bdg label={r.type} color={r.type==="Deduction"?C.danger:C.success} bg={r.type==="Deduction"?C.dBg:C.sBg} border={r.type==="Deduction"?"#f5c6c6":"#b5dfc8"}/>,
+          <span style={{color:r.type==="Deduction"?C.danger:C.success,fontWeight:700}}>{r.type==="Deduction"?"-":""}{GHC(r.amount)}</span>,
+          r.method||"Cash",
+          r.paidDate||"—",
+          <span style={{color:C.muted,fontSize:12}}>{r.notes||"—"}</span>,
+          <div style={{display:"flex",gap:6}}>
+            <Btn size="sm" variant="outline" onClick={()=>setM({mode:"edit",id:r.id,data:{...r}})}>Edit</Btn>
+            <Btn size="sm" variant="danger" onClick={()=>setDel(r.id)}>Del</Btn>
+          </div>
+        ]}/>;
+      })}</tbody></table></div>
+    </Card>}
+    {/* Per-driver summary */}
+    {drivers.length>0&&<Card style={{marginTop:18}}>
+      <SectionTitle title="Per-Driver Summary (All Time)"/>
+      <div style={{overflowX:"auto"}}><table><TH cols={["Driver","Payments","Total Paid","Last Payment"]}/>
+      <tbody>{drivers.map(drv=>{
+        const dRows=(salaries||[]).filter(s=>s.driverID===drv.id&&s.type!=="Deduction");
+        const dDed=(salaries||[]).filter(s=>s.driverID===drv.id&&s.type==="Deduction");
+        const net=dRows.reduce((a,b)=>a+Number(b.amount||0),0)-dDed.reduce((a,b)=>a+Number(b.amount||0),0);
+        const last=[...(salaries||[]).filter(s=>s.driverID===drv.id)].sort((a,b)=>b.paidDate?.localeCompare(a.paidDate||"")||0)[0];
+        return <TR key={drv.id} cells={[
+          <b>{drv.name}</b>,
+          (salaries||[]).filter(s=>s.driverID===drv.id).length,
+          <span style={{color:net>=0?C.success:C.danger,fontWeight:600}}>{GHC(net)}</span>,
+          last?.paidDate||"—"
+        ]}/>;
+      })}</tbody></table></div>
+    </Card>}
+    {M&&<Modal title={M.mode==="add"?"Record Salary Payment":"Edit Salary Record"} onClose={()=>setM(null)}>
+      <FormGrid>
+        <Inp label="Driver" value={M.data.driverID} onChange={f("driverID")} opts={[{label:"— Select Driver —",value:""},...drivers.map(d=>({label:d.name,value:d.id}))]} req/>
+        <Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS} req/>
+        <Inp label="Payment Type" value={M.data.type} onChange={f("type")} opts={TYPES}/>
+        <Inp label="Amount (GH₵)" value={M.data.amount} onChange={f("amount")} type="number" req/>
+        <Inp label="Payment Method" value={M.data.method} onChange={f("method")} opts={METHODS}/>
+        <Inp label="Paid Date" value={M.data.paidDate} onChange={f("paidDate")} type="date"/>
+        <FullCol><Inp label="Notes" value={M.data.notes} onChange={f("notes")}/></FullCol>
+      </FormGrid>
+      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
+    </Modal>}
+    {del&&<ConfirmDel msg="Delete this salary record?" onConfirm={()=>{removeSalary(del);setDel(null);}} onClose={()=>setDel(null)}/>}
   </div>;
 }
 
