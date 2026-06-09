@@ -143,6 +143,8 @@ function bootstrap(){
   ];
   LS.set("payments",payments);
 
+  LS.set("driverComplaints",[]);
+  LS.set("driverIssues",[]);
   LS.set("bootstrapped",true);
 }
 bootstrap();
@@ -219,6 +221,37 @@ function ActBtns({onEdit,onDel}){
     <Btn sm v="ghost" danger onClick={onDel}>🗑️</Btn>
   </div>;
 }
+/* ─── Receipt Upload Helper ─── */
+function readFileAsDataURL(file,maxKB,cb){
+  if(file.size>maxKB*1024){alert(`File must be under ${maxKB}KB. Please compress or use a smaller image.`);return;}
+  const r=new FileReader();r.onload=e=>cb(e.target.result);r.readAsDataURL(file);
+}
+function ReceiptField({value,onChange,label="Receipt / Photo (optional)"}){
+  return <div style={{display:"flex",flexDirection:"column",gap:7,gridColumn:"1/-1"}}>
+    <label style={{fontSize:12,fontWeight:600,color:C.muted}}>{label}</label>
+    <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+      <label style={{background:C.primary,color:"#fff",borderRadius:7,padding:"7px 13px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+        📎 Attach Photo/Receipt
+        <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={e=>{const f=e.target.files[0];if(!f)return;readFileAsDataURL(f,800,v=>onChange(v));e.target.value="";}} style={{display:"none"}}/>
+      </label>
+      {value&&<><span style={{fontSize:12,color:C.success,fontWeight:600}}>✓ Attached</span>
+        <button onClick={()=>onChange("")} style={{background:"none",border:`1px solid ${C.danger}`,color:C.danger,borderRadius:6,padding:"4px 9px",fontSize:11,cursor:"pointer",fontWeight:600}}>✕ Remove</button></>}
+      {!value&&<span style={{fontSize:12,color:C.muted}}>No file attached</span>}
+    </div>
+    {value&&<div style={{marginTop:4}}>
+      <img src={value} alt="receipt" style={{maxHeight:120,maxWidth:"100%",borderRadius:8,border:`1px solid ${C.border}`,objectFit:"contain",background:"#f8f9fa"}}/>
+    </div>}
+    <span style={{fontSize:11,color:C.muted}}>PNG, JPG or WEBP — max 800KB. Stored locally in browser.</span>
+  </div>;
+}
+function ReceiptThumb({value}){
+  if(!value)return <span style={{color:C.muted,fontSize:11}}>—</span>;
+  return <a href={value} target="_blank" rel="noreferrer" style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11,color:C.info,fontWeight:600,textDecoration:"none"}}>
+    <img src={value} alt="receipt" style={{width:28,height:28,objectFit:"cover",borderRadius:4,border:`1px solid ${C.border}`}}/>
+    View
+  </a>;
+}
+
 function Alert({type,children}){
   const styles={warn:{bg:C.wBg,border:C.wBd,color:C.wTx,icon:"⚠️"},danger:{bg:C.dBg,border:"#f5b0b0",color:C.danger,icon:"🚨"},info:{bg:C.iBg,border:"#a5c2f2",color:C.info,icon:"ℹ️"},success:{bg:C.sBg,border:"#aedcc2",color:C.success,icon:"✓"}};
   const s=styles[type]||styles.info;
@@ -568,14 +601,14 @@ function GMPortal({user,onLogout,brand,onBrandUpdate}){
   const [page,setPage]=useState("dashboard");
   const {data:users,save:saveUsers}=useData("users");
   const {data:carInfo,save:saveCarInfo}=useData("carInfo");
-  const {data:driverSales}=useData("driverSales");
-  const {data:driverExpenses}=useData("driverExpenses");
+  const {data:driverSales,save:saveDrvSales}=useData("driverSales");
+  const {data:driverExpenses,save:saveDrvExp}=useData("driverExpenses");
   const {data:opsSales}=useData("opsSales");
-  const {data:parts}=useData("parts");
-  const {data:oil}=useData("oil");
-  const {data:insurance}=useData("insurance");
-  const {data:logs}=useData("logs");
-  const {data:payments}=useData("payments");
+  const {data:parts,save:saveParts,add:addPart,update:updatePart,remove:removePart}=useData("parts");
+  const {data:oil,save:saveOil,add:addOil,update:updateOil,remove:removeOil}=useData("oil");
+  const {data:insurance,save:saveIns,add:addIns,update:updateIns,remove:removeIns}=useData("insurance");
+  const {data:logs,save:saveLogs,add:addLog,update:updateLog,remove:removeLog}=useData("logs");
+  const {data:payments,save:savePayments,add:addPayment,update:updatePayment,remove:removePayment}=useData("payments");
 
   const drivers=users.filter(u=>u.role===ROLES.DRIVER);
 
@@ -588,12 +621,15 @@ function GMPortal({user,onLogout,brand,onBrandUpdate}){
     {id:"users",icon:"👥",label:"User Management"},
     {section:true,label:"OPERATIONS"},
     {id:"sales",icon:"💰",label:"All Sales"},
-    {id:"drvexpenses",icon:"🧾",label:"Driver Expenses"},
+    {id:"drvsubmissions",icon:"📋",label:"Driver Submissions"},
     {id:"insurance",icon:"🛡️",label:"Insurance"},
     {id:"parts",icon:"🔧",label:"Car Parts"},
     {id:"oil",icon:"🛢️",label:"Oil Records"},
     {id:"payments",icon:"💳",label:"Payments"},
-    {id:"logs",icon:"📝",label:"Issue Logs"},
+    {id:"oplogs",icon:"📝",label:"Ops Issue Logs"},
+    {section:true,label:"DRIVER MATTERS"},
+    {id:"drvissues",icon:"🚨",label:"Driver Issue Log"},
+    {id:"complaints",icon:"💬",label:"Complaints & Reports"},
     {section:true,label:"ADMIN"},
     {id:"settings",icon:"⚙️",label:"App Settings"},
   ];
@@ -605,12 +641,14 @@ function GMPortal({user,onLogout,brand,onBrandUpdate}){
     drivers:<GMDrivers drivers={drivers} carInfo={carInfo} driverSales={driverSales} driverExpenses={driverExpenses}/>,
     users:<GMUsers users={users} saveUsers={saveUsers} currentUser={user}/>,
     sales:<GMAllSales driverSales={driverSales} drivers={drivers} opsSales={opsSales}/>,
-    drvexpenses:<GMDriverExpenses driverExpenses={driverExpenses} drivers={drivers} carInfo={carInfo}/>,
-    insurance:<GMInsurance insurance={insurance}/>,
-    parts:<GMParts parts={parts}/>,
-    oil:<GMOil oil={oil}/>,
-    payments:<GMPayments payments={payments}/>,
-    logs:<GMLogs logs={logs}/>,
+    drvsubmissions:<GMDriverDataEdit drivers={drivers} carInfo={carInfo} saveCarInfo={saveCarInfo} driverSales={driverSales} saveDrvSales={saveDrvSales} driverExpenses={driverExpenses} saveDrvExp={saveDrvExp} user={user}/>,
+    insurance:<OpsInsurance insurance={insurance} addIns={addIns} updateIns={updateIns} removeIns={removeIns} carInfo={carInfo} user={user}/>,
+    parts:<OpsParts parts={parts} addPart={addPart} updatePart={updatePart} removePart={removePart} carInfo={carInfo} user={user}/>,
+    oil:<OpsOil oil={oil} addOil={addOil} updateOil={updateOil} removeOil={removeOil} user={user}/>,
+    payments:<OpsPayments payments={payments} addPayment={addPayment} updatePayment={updatePayment} removePayment={removePayment} user={user}/>,
+    oplogs:<OpsLogs logs={logs} addLog={addLog} updateLog={updateLog} removeLog={removeLog} carInfo={carInfo} user={user}/>,
+    drvissues:<GMIssueLogFull/>,
+    complaints:<GMComplaintsOversight/>,
     settings:<GMSettings brand={brand} onSave={onBrandUpdate} currentUser={user}/>,
   };
 
@@ -1067,9 +1105,9 @@ function OpsPortal({user,onLogout,brand}){
   const {data:insurance,add:addIns,update:updateIns,remove:removeIns}=useData("insurance");
   const {data:logs,add:addLog,update:updateLog,remove:removeLog}=useData("logs");
   const {data:payments,add:addPayment,update:updatePayment,remove:removePayment}=useData("payments");
-  const {data:driverSales}=useData("driverSales");
-  const {data:driverExpenses}=useData("driverExpenses");
-  const {data:carInfo}=useData("carInfo");
+  const {data:driverSales,save:saveDrvSales}=useData("driverSales");
+  const {data:driverExpenses,save:saveDrvExp}=useData("driverExpenses");
+  const {data:carInfo,save:saveCarInfo}=useData("carInfo");
   const {data:users}=useData("users");
   const drivers=users.filter(u=>u.role===ROLES.DRIVER);
 
@@ -1082,8 +1120,10 @@ function OpsPortal({user,onLogout,brand}){
     {id:"insurance",icon:"🛡️",label:"Insurance"},
     {id:"payments",icon:"💳",label:"Payments to Others"},
     {id:"logs",icon:"📝",label:"Report / Issue Log"},
-    {section:true,label:"VIEW"},
-    {id:"drvexpenses",icon:"🧾",label:"Driver Expenses"},
+    {section:true,label:"DRIVER MANAGEMENT"},
+    {id:"drvsubmissions",icon:"📋",label:"Driver Submissions"},
+    {id:"drvissues",icon:"🚨",label:"Driver Issue Log"},
+    {id:"complaints",icon:"💬",label:"Complaints Review"},
   ];
 
   const pages={
@@ -1094,7 +1134,9 @@ function OpsPortal({user,onLogout,brand}){
     insurance:<OpsInsurance insurance={insurance} addIns={addIns} updateIns={updateIns} removeIns={removeIns} carInfo={carInfo} user={user}/>,
     payments:<OpsPayments payments={payments} addPayment={addPayment} updatePayment={updatePayment} removePayment={removePayment} user={user}/>,
     logs:<OpsLogs logs={logs} addLog={addLog} updateLog={updateLog} removeLog={removeLog} carInfo={carInfo} user={user}/>,
-    drvexpenses:<GMDriverExpenses driverExpenses={driverExpenses} drivers={drivers} carInfo={carInfo}/>,
+    drvsubmissions:<OpsDriverSubmissions drivers={drivers} carInfo={carInfo} saveCarInfo={saveCarInfo} driverSales={driverSales} saveDriverSales={saveDrvSales} driverExpenses={driverExpenses} saveDrvExp={saveDrvExp} user={user}/>,
+    drvissues:<OpsIssueReview carInfo={carInfo}/>,
+    complaints:<OpsComplaintsReview user={user}/>,
   };
 
   return <Shell user={user} onLogout={onLogout} nav={nav} activePage={page} setPage={setPage} brand={brand}>
@@ -1165,7 +1207,7 @@ function OpsSales({opsSales,addOSale,updateOSale,removeOSale,user}){
 
 function OpsParts({parts,addPart,updatePart,removePart,carInfo,user}){
   const carNums=[...new Set(carInfo.map(c=>c.carNumber))];
-  const blank={week:WEEKS[0],carNumber:carNums[0]||"",part:"",supplier:"",qty:"",unitCost:""};
+  const blank={week:WEEKS[0],carNumber:carNums[0]||"",part:"",supplier:"",qty:"",unitCost:"",receipt:""};
   const [M,setM]=useState(null),[del,setDel]=useState(null);
   const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
   const save=()=>{const d=M.data;if(!d.part||!d.qty)return alert("Fill required fields");const total=Number(d.qty)*Number(d.unitCost||0);const item={...d,qty:Number(d.qty),unitCost:Number(d.unitCost||0),total,submittedBy:user.id,submittedAt:today()};M.mode==="add"?addPart(item):updatePart(M.data.id,item);setM(null);};
@@ -1174,8 +1216,8 @@ function OpsParts({parts,addPart,updatePart,removePart,carInfo,user}){
     <PageTitle title="Car Parts & Maintenance" sub="Log all parts purchases and maintenance expenses"
       action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Record</Btn>}/>
     <Metric label="Total Parts Spend" value={GHC(tot)} sub="All time" color="#fceaea"/><div style={{marginBottom:18}}/>
-    <Card><div style={{overflowX:"auto"}}><table><TH cols={["Week","Car","Part","Supplier","Qty","Unit Cost","Total","Date",""]}/>
-    <tbody>{parts.map((r,i)=><TR key={i} cells={[r.week,<b style={{color:C.primary}}>{r.carNumber}</b>,r.part,r.supplier||"—",r.qty,GHC(r.unitCost),<span style={{color:C.danger,fontWeight:600}}>{GHC(r.total)}</span>,r.submittedAt||"—",<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,qty:String(r.qty),unitCost:String(r.unitCost)}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table></div></Card>
+    <Card><div style={{overflowX:"auto"}}><table><TH cols={["Week","Car","Part","Supplier","Qty","Unit Cost","Total","Receipt","Date",""]}/>
+    <tbody>{parts.map((r,i)=><TR key={i} cells={[r.week,<b style={{color:C.primary}}>{r.carNumber}</b>,r.part,r.supplier||"—",r.qty,GHC(r.unitCost),<span style={{color:C.danger,fontWeight:600}}>{GHC(r.total)}</span>,<ReceiptThumb value={r.receipt}/>,r.submittedAt||"—",<ActBtns onEdit={()=>setM({mode:"edit",data:{...r,qty:String(r.qty),unitCost:String(r.unitCost),receipt:r.receipt||""}})} onDel={()=>setDel(r.id)}/>]}/>)}</tbody></table></div></Card>
     {M&&<Modal title={M.mode==="add"?"Add Parts Record":"Edit Parts Record"} onClose={()=>setM(null)}>
       <FormGrid>
         <Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS} req/>
@@ -1184,6 +1226,7 @@ function OpsParts({parts,addPart,updatePart,removePart,carInfo,user}){
         <Inp label="Supplier" value={M.data.supplier} onChange={f("supplier")}/>
         <Inp label="Quantity" value={M.data.qty} onChange={f("qty")} type="number" req/>
         <Inp label="Unit Cost (GH₵)" value={M.data.unitCost} onChange={f("unitCost")} type="number"/>
+        <FullCol><ReceiptUpload value={M.data.receipt||""} onChange={f("receipt")} label="Attach Receipt / Invoice (optional)"/></FullCol>
       </FormGrid>
       {M.data.qty&&M.data.unitCost&&<div style={{marginBottom:14,padding:"10px 14px",background:"#eef2f8",borderRadius:8,fontSize:13}}>Total: <b style={{color:C.primary}}>{GHC(Number(M.data.qty)*Number(M.data.unitCost))}</b></div>}
       <FormFooter onCancel={()=>setM(null)} onSave={save}/>
@@ -1365,6 +1408,9 @@ function DriverPortal({user,onLogout,brand}){
     {id:"carinfo",icon:"🚐",label:"My Car & Documents"},
     {id:"sales",icon:"💰",label:"My Weekly Sales"},
     {id:"expenses",icon:"🧾",label:"My Expenses"},
+    {section:true,label:"REPORTS"},
+    {id:"issues",icon:"⚠️",label:"My Issue Log"},
+    {id:"complaints",icon:"📣",label:"Reports & Complaints"},
   ];
 
   const pages={
@@ -1372,6 +1418,8 @@ function DriverPortal({user,onLogout,brand}){
     carinfo:<DriverCarInfo user={user} myCarInfo={myCarInfo} carInfoAll={carInfoAll} onSave={saveCarInfoForMe}/>,
     sales:<DriverSales user={user} mySales={mySales} addSale={addSale} updateSale={updateSale} removeSale={removeSale}/>,
     expenses:<DriverExpenses user={user} myExpenses={myExpenses} myCarInfo={myCarInfo} addExpense={addExpense} updateExpense={updateExpense} removeExpense={removeExpense}/>,
+    issues:<DriverIssueLog user={user} myCarInfo={myCarInfo}/>,
+    complaints:<DriverComplaints user={user}/>,
   };
 
   return <Shell user={user} onLogout={onLogout} nav={nav} activePage={page} setPage={setPage} brand={brand}>
@@ -1498,7 +1546,7 @@ function DriverSales({user,mySales,addSale,updateSale,removeSale}){
 
 function DriverExpenses({user,myExpenses,myCarInfo,addExpense,updateExpense,removeExpense}){
   const CATS=["Fuel","Tolls","Parking","Minor Repair","Cleaning","Loading Fee","Other"];
-  const blank={week:WEEKS[0],category:"Fuel",description:"",amount:""};
+  const blank={week:WEEKS[0],category:"Fuel",description:"",amount:"",receipt:""};
   const [M,setM]=useState(null),[del,setDel]=useState(null);
   const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
   const save=()=>{
@@ -1533,13 +1581,14 @@ function DriverExpenses({user,myExpenses,myCarInfo,addExpense,updateExpense,remo
           <b style={{color:C.primary,fontSize:14}}>{wk}</b>
           <span style={{color:C.danger,fontWeight:700}}>{GHC(wkTot)}</span>
         </div>
-        <table><TH cols={["Category","Description","Amount","Date",""]}/>
+        <table><TH cols={["Category","Description","Amount","Receipt","Date",""]}/>
         <tbody>{rows.map((r,i)=><TR key={i} cells={[
           <Bdg label={r.category} color={C.info} bg={C.iBg} border="#b5c8f0"/>,
           r.description||"—",
           <span style={{color:C.danger,fontWeight:600}}>{GHC(r.amount)}</span>,
+          <ReceiptThumb value={r.receipt}/>,
           r.submittedAt||"—",
-          <ActBtns onEdit={()=>setM({mode:"edit",data:{...r,amount:String(r.amount)}})} onDel={()=>setDel(r.id)}/>
+          <ActBtns onEdit={()=>setM({mode:"edit",data:{...r,amount:String(r.amount),receipt:r.receipt||""}})} onDel={()=>setDel(r.id)}/>
         ]}/>)}</tbody></table>
       </Card>;
     })}
@@ -1550,10 +1599,469 @@ function DriverExpenses({user,myExpenses,myCarInfo,addExpense,updateExpense,remo
         <Inp label="Category" value={M.data.category} onChange={f("category")} opts={CATS} req/>
         <FullCol><Inp label="Description (optional)" value={M.data.description} onChange={f("description")} ph="e.g. Fuel on Kasoa–Accra route"/></FullCol>
         <Inp label="Amount (GH₵)" value={M.data.amount} onChange={f("amount")} type="number" req/>
+        <FullCol><ReceiptUpload value={M.data.receipt||""} onChange={f("receipt")} label="Attach Receipt / Photo (optional)"/></FullCol>
       </FormGrid>
       <FormFooter onCancel={()=>setM(null)} onSave={save} saveLabel="Submit"/>
     </Modal>}
     {del&&<ConfirmDel msg="Delete this expense record?" onConfirm={()=>{removeExpense(del);setDel(null);}} onClose={()=>setDel(null)}/>}
+  </div>;
+}
+
+/* ─────────────────────────────────────────
+   RECEIPT UPLOAD COMPONENT
+───────────────────────────────────────── */
+// ReceiptUpload is an alias for ReceiptField (defined earlier)
+const ReceiptUpload=ReceiptField;
+
+/* ═══════════════════════════════════════
+   DRIVER ISSUE LOG (driver-facing)
+═══════════════════════════════════════ */
+function DriverIssueLog({user,myCarInfo}){
+  const {data:issues,save:saveIssues}=useData("driverIssues");
+  const myIssues=issues.filter(i=>i.driverID===user.id);
+  const blank={date:today(),carNumber:myCarInfo?.carNumber||"",type:"Breakdown",desc:"",severity:"Low",receipt:""};
+  const [M,setM]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{
+    const d=M.data;if(!d.desc)return alert("Description is required.");
+    const item={...d,driverID:user.id,driverName:user.name,status:"Open",submittedAt:today()};
+    if(M.mode==="add") saveIssues([...issues,{...item,id:uid()}]);
+    else saveIssues(issues.map(x=>x.id===M.data.id?{...item,id:M.data.id}:x));
+    setM(null);
+  };
+  const remove=id=>saveIssues(issues.filter(x=>x.id!==id));
+  const sevC={Low:[C.success,"#e6f4ec"],Moderate:[C.accent,C.wBg],High:[C.danger,C.dBg]};
+  return <div className="fade">
+    <PageTitle title="My Issue Log" sub="Report vehicle problems, incidents or accidents"
+      action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Report Issue</Btn>}/>
+    <Alert type="info">Use this to report breakdowns, accidents, or any problem with your vehicle. Ops Manager and GM will be notified and can update the status.</Alert>
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {myIssues.length===0&&<Card><p style={{color:C.muted,fontSize:13}}>No issues reported yet.</p></Card>}
+      {[...myIssues].reverse().map(l=>{const[sc,sbg]=sevC[l.severity]||[C.muted,"#f0f2f5"];return<Card key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16}}>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:6}}>
+            <b style={{color:C.primary}}>{l.type}</b>
+            <Bdg label={l.severity} color={sc} bg={sbg} border={sc+"66"}/>
+            <SBdg s={l.status}/>
+            <span style={{fontSize:12,color:C.muted}}>• {l.date}</span>
+          </div>
+          <div style={{fontSize:13,color:C.text,marginBottom:4}}>{l.desc}</div>
+          {l.receipt&&<ReceiptThumb value={l.receipt}/>}
+          {l.opsNote&&<div style={{marginTop:8,padding:"8px 12px",background:C.iBg,borderRadius:7,fontSize:12,color:C.info}}><b>Ops Note:</b> {l.opsNote}</div>}
+        </div>
+        {l.status==="Open"&&<div style={{display:"flex",gap:6,flexShrink:0}}>
+          <Btn sm v="outline" onClick={()=>setM({mode:"edit",data:{...l}})}>✏️ Edit</Btn>
+          <Btn sm v="ghost" danger onClick={()=>remove(l.id)}>🗑️</Btn>
+        </div>}
+      </Card>;})}
+    </div>
+    {M&&<Modal title={M.mode==="add"?"Report Issue":"Edit Issue"} onClose={()=>setM(null)}>
+      <FormGrid>
+        <Inp label="Date" value={M.data.date} onChange={f("date")} type="date" req/>
+        <Inp label="Incident Type" value={M.data.type} onChange={f("type")} opts={["Breakdown","Accident","Mechanical Fault","Traffic Offence","Other"]} req/>
+        <Inp label="Car Number" value={M.data.carNumber} onChange={f("carNumber")} ph="Your fleet car number" readOnly={!!myCarInfo?.carNumber}/>
+        <Inp label="Severity" value={M.data.severity} onChange={f("severity")} opts={["Low","Moderate","High"]}/>
+        <FullCol>
+          <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Description <span style={{color:C.danger}}>*</span></label>
+          <textarea value={M.data.desc} onChange={e=>f("desc")(e.target.value)} rows={3} style={{display:"block",width:"100%",marginTop:5,padding:"8px 10px",borderRadius:7,border:`1px solid ${C.border}`,fontSize:13,resize:"vertical",boxSizing:"border-box"}}/>
+        </FullCol>
+        <FullCol><ReceiptUpload value={M.data.receipt||""} onChange={f("receipt")} label="Attach Photo/Receipt (optional)"/></FullCol>
+      </FormGrid>
+      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
+    </Modal>}
+  </div>;
+}
+
+/* ═══════════════════════════════════════
+   DRIVER COMPLAINTS (driver-facing)
+═══════════════════════════════════════ */
+function DriverComplaints({user}){
+  const {data:complaints,save:saveComplaints}=useData("driverComplaints");
+  const mine=complaints.filter(c=>c.driverID===user.id);
+  const blank={subject:"",message:"",against:"",priority:"Normal"};
+  const [M,setM]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{
+    const d=M.data;if(!d.subject||!d.message)return alert("Subject and message are required.");
+    const item={...d,driverID:user.id,driverName:user.name,status:"Submitted",submittedAt:today()};
+    saveComplaints([...complaints,{...item,id:uid()}]);setM(null);
+  };
+  const stC={"Submitted":[C.info,C.iBg],"Under Review":[C.accent,C.wBg],"Escalated to GM":[C.danger,C.dBg],"Resolved":[C.success,C.sBg]};
+  return <div className="fade">
+    <PageTitle title="My Reports & Complaints" sub="Submit complaints or reports to Ops Manager"
+      action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ New Report</Btn>}/>
+    <Alert type="info">Your reports are reviewed by the Ops Manager and may be escalated to the General Manager. You will see status updates here.</Alert>
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {mine.length===0&&<Card><p style={{color:C.muted,fontSize:13}}>No reports submitted yet.</p></Card>}
+      {[...mine].reverse().map(c=>{const[sc,sbg]=stC[c.status]||[C.muted,"#f0f2f5"];return<Card key={c.id}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:8}}>
+          <div>
+            <b style={{color:C.primary,fontSize:14}}>{c.subject}</b>
+            <span style={{marginLeft:10}}><Bdg label={c.status} color={sc} bg={sbg} border={sc+"44"}/></span>
+          </div>
+          <span style={{fontSize:11,color:C.muted,whiteSpace:"nowrap"}}>{c.submittedAt}</span>
+        </div>
+        {c.against&&<div style={{fontSize:12,color:C.muted,marginBottom:6}}>Against / Regarding: <b>{c.against}</b></div>}
+        <div style={{fontSize:13,color:C.text,marginBottom:8}}>{c.message}</div>
+        {c.opsResponse&&<div style={{padding:"8px 12px",background:C.iBg,borderRadius:7,fontSize:12,color:C.info,marginTop:6}}><b>Ops Response:</b> {c.opsResponse}</div>}
+        {c.gmNote&&<div style={{padding:"8px 12px",background:"#f3eef8",borderRadius:7,fontSize:12,color:"#6a3d9a",marginTop:6}}><b>GM Note:</b> {c.gmNote}</div>}
+      </Card>;})}
+    </div>
+    {M&&<Modal title="Submit Report / Complaint" onClose={()=>setM(null)}>
+      <FormGrid>
+        <FullCol><Inp label="Subject" value={M.data.subject} onChange={f("subject")} req ph="Brief summary of your report"/></FullCol>
+        <Inp label="Against / Regarding (optional)" value={M.data.against} onChange={f("against")} ph="Person, vehicle, or situation"/>
+        <Inp label="Priority" value={M.data.priority} onChange={f("priority")} opts={["Normal","Urgent"]}/>
+        <FullCol>
+          <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Message <span style={{color:C.danger}}>*</span></label>
+          <textarea value={M.data.message} onChange={e=>f("message")(e.target.value)} rows={4} placeholder="Describe your complaint or report in detail..." style={{display:"block",width:"100%",marginTop:5,padding:"8px 10px",borderRadius:7,border:`1px solid ${C.border}`,fontSize:13,resize:"vertical",boxSizing:"border-box"}}/>
+        </FullCol>
+      </FormGrid>
+      <FormFooter onCancel={()=>setM(null)} onSave={save} saveLabel="Submit Report"/>
+    </Modal>}
+  </div>;
+}
+
+/* ═══════════════════════════════════════
+   OPS — DRIVER SUBMISSIONS MANAGER
+   (view + edit all sales, expenses, car info)
+═══════════════════════════════════════ */
+function OpsDriverSubmissions({drivers,carInfo,saveCarInfo,driverSales,saveDriverSales,driverExpenses,saveDrvExp,user}){
+  const [tab,setTab]=useState("sales");
+  const [editM,setEditM]=useState(null);
+  const f=k=>v=>setEditM(m=>({...m,data:{...m.data,[k]:v}}));
+  const carNums=[...new Set(carInfo.map(c=>c.carNumber))];
+
+  // ── Sales edit/delete ──
+  const saveSale=()=>{
+    const d=editM.data;if(!d.week||!d.amount)return alert("Week and amount required.");
+    saveDrvSales(driverSales.map(s=>s.id===d.id?{...d,amount:Number(d.amount),trips:Number(d.trips||0)}:s));
+    setEditM(null);
+  };
+  const removeSale=id=>saveDrvSales(driverSales.filter(s=>s.id!==id));
+
+  // ── Expenses edit/delete ──
+  const saveExp=()=>{
+    const d=editM.data;if(!d.category||!d.amount)return alert("Category and amount required.");
+    saveDrvExp(driverExpenses.map(e=>e.id===d.id?{...d,amount:Number(d.amount)}:e));
+    setEditM(null);
+  };
+  const removeExp=id=>saveDrvExp(driverExpenses.filter(e=>e.id!==id));
+
+  // ── Car info edit ──
+  const saveCar=()=>{
+    const d=editM.data;if(!d.carNumber||!d.plate)return alert("Car number and plate required.");
+    saveCarInfo(carInfo.map(c=>c.id===d.id?{...d,updatedAt:today()}:c));setEditM(null);
+  };
+
+  const saveDrvSales=saveDriverSales;
+  const CATS=["Fuel","Tolls","Parking","Minor Repair","Cleaning","Loading Fee","Other"];
+
+  return <div className="fade">
+    <PageTitle title="Driver Submissions" sub="View and edit all driver-submitted data"/>
+    <Tabs tabs={[{id:"sales",label:"💰 Sales"},{id:"expenses",label:"🧾 Expenses"},{id:"carinfo",label:"🚐 Car Info"}]} active={tab} onChange={setTab}/>
+
+    {tab==="sales"&&<div>
+      {drivers.map(drv=>{
+        const rows=driverSales.filter(s=>s.driverID===drv.id);
+        if(!rows.length)return null;
+        return <Card key={drv.id} style={{marginBottom:16}}>
+          <SectionTitle title={`${drv.name} — ${drv.driverID||drv.username}`}/>
+          <div style={{overflowX:"auto"}}><table><TH cols={["Week","Trips","Amount","Notes","Submitted","Actions"]}/>
+          <tbody>{rows.map((r,i)=><TR key={i} cells={[r.week,r.trips,<span style={{color:C.success,fontWeight:600}}>{GHC(r.amount)}</span>,r.notes||"—",r.submittedAt||"—",
+            <div style={{display:"flex",gap:6}}>
+              <Btn sm v="outline" onClick={()=>setEditM({type:"sale",data:{...r,trips:String(r.trips),amount:String(r.amount)}})}>✏️</Btn>
+              <Btn sm v="ghost" danger onClick={()=>removeSale(r.id)}>🗑️</Btn>
+            </div>]}/>)}
+          </tbody></table></div>
+        </Card>;
+      })}
+      {driverSales.length===0&&<Card><p style={{color:C.muted,fontSize:13}}>No driver sales yet.</p></Card>}
+    </div>}
+
+    {tab==="expenses"&&<div>
+      {drivers.map(drv=>{
+        const rows=(driverExpenses||[]).filter(e=>e.driverID===drv.id);
+        if(!rows.length)return null;
+        return <Card key={drv.id} style={{marginBottom:16}}>
+          <SectionTitle title={`${drv.name} — ${drv.driverID||drv.username}`}/>
+          <div style={{overflowX:"auto"}}><table><TH cols={["Week","Category","Description","Amount","Receipt","Submitted","Actions"]}/>
+          <tbody>{rows.map((r,i)=><TR key={i} cells={[r.week,<Bdg label={r.category} color={C.info} bg={C.iBg} border="#b5c8f0"/>,r.description||"—",<span style={{color:C.danger,fontWeight:600}}>{GHC(r.amount)}</span>,<ReceiptThumb value={r.receipt}/>,r.submittedAt||"—",
+            <div style={{display:"flex",gap:6}}>
+              <Btn sm v="outline" onClick={()=>setEditM({type:"expense",data:{...r,amount:String(r.amount)}})}>✏️</Btn>
+              <Btn sm v="ghost" danger onClick={()=>removeExp(r.id)}>🗑️</Btn>
+            </div>]}/>)}
+          </tbody></table></div>
+        </Card>;
+      })}
+      {(driverExpenses||[]).length===0&&<Card><p style={{color:C.muted,fontSize:13}}>No driver expenses yet.</p></Card>}
+    </div>}
+
+    {tab==="carinfo"&&<Card>
+      <div style={{overflowX:"auto"}}><table><TH cols={["Driver","Car No.","Plate","Make","Colour","Licence Expiry","RW Expiry","Status","Actions"]}/>
+      <tbody>{carInfo.map((c,i)=>{
+        const drv=drivers.find(d=>d.id===c.driverID);
+        const rwSt=expiryStatus(c.roadworthyExpiry);
+        return <TR key={i} cells={[drv?drv.name:<span style={{color:C.muted}}>Unassigned</span>,<b style={{color:C.primary}}>{c.carNumber}</b>,c.plate,c.make||"—",c.color||"—",c.licenseExpiry||"—",c.roadworthyExpiry||"—",<SBdg s={rwSt}/>,<Btn sm v="outline" onClick={()=>setEditM({type:"car",data:{...c}})}>✏️ Edit</Btn>]}/>;
+      })}</tbody></table></div>
+    </Card>}
+
+    {/* Sale edit modal */}
+    {editM?.type==="sale"&&<Modal title="Edit Driver Sale" onClose={()=>setEditM(null)}>
+      <FormGrid>
+        <Inp label="Week" value={editM.data.week} onChange={f("week")} opts={WEEKS} req/>
+        <Inp label="Trips" value={editM.data.trips} onChange={f("trips")} type="number"/>
+        <Inp label="Amount (GH₵)" value={editM.data.amount} onChange={f("amount")} type="number" req/>
+        <FullCol><Inp label="Notes" value={editM.data.notes||""} onChange={f("notes")}/></FullCol>
+      </FormGrid>
+      <FormFooter onCancel={()=>setEditM(null)} onSave={saveSale}/>
+    </Modal>}
+
+    {/* Expense edit modal */}
+    {editM?.type==="expense"&&<Modal title="Edit Driver Expense" onClose={()=>setEditM(null)}>
+      <FormGrid>
+        <Inp label="Week" value={editM.data.week} onChange={f("week")} opts={WEEKS} req/>
+        <Inp label="Category" value={editM.data.category} onChange={f("category")} opts={CATS} req/>
+        <Inp label="Amount (GH₵)" value={editM.data.amount} onChange={f("amount")} type="number" req/>
+        <FullCol><Inp label="Description" value={editM.data.description||""} onChange={f("description")}/></FullCol>
+        <FullCol><ReceiptUpload value={editM.data.receipt||""} onChange={f("receipt")}/></FullCol>
+      </FormGrid>
+      <FormFooter onCancel={()=>setEditM(null)} onSave={saveExp}/>
+    </Modal>}
+
+    {/* Car info edit modal */}
+    {editM?.type==="car"&&<Modal title="Edit Car Info" onClose={()=>setEditM(null)}>
+      <FormGrid>
+        <Inp label="Car Number" value={editM.data.carNumber} onChange={f("carNumber")} req/>
+        <Inp label="Plate" value={editM.data.plate} onChange={f("plate")} req/>
+        <Inp label="Make / Model" value={editM.data.make||""} onChange={f("make")}/>
+        <Inp label="Colour" value={editM.data.color||""} onChange={f("color")}/>
+        <Inp label="Licence No." value={editM.data.licenseNo||""} onChange={f("licenseNo")}/>
+        <Inp label="Licence Expiry" value={editM.data.licenseExpiry||""} onChange={f("licenseExpiry")} type="date"/>
+        <Inp label="RW Issued" value={editM.data.roadworthyIssued||""} onChange={f("roadworthyIssued")} type="date"/>
+        <Inp label="RW Expiry" value={editM.data.roadworthyExpiry||""} onChange={f("roadworthyExpiry")} type="date"/>
+      </FormGrid>
+      <FormFooter onCancel={()=>setEditM(null)} onSave={saveCar}/>
+    </Modal>}
+  </div>;
+}
+
+/* ═══════════════════════════════════════
+   OPS — COMPLAINTS REVIEW
+═══════════════════════════════════════ */
+function OpsComplaintsReview({user}){
+  const {data:complaints,save:saveComplaints}=useData("driverComplaints");
+  const [det,setDet]=useState(null);
+  const [resp,setResp]=useState("");
+  const stC={"Submitted":[C.info,C.iBg],"Under Review":[C.accent,C.wBg],"Escalated to GM":[C.danger,C.dBg],"Resolved":[C.success,C.sBg]};
+
+  const update=(id,patch)=>{saveComplaints(complaints.map(c=>c.id===id?{...c,...patch}:c));if(det?.id===id)setDet(d=>({...d,...patch}));};
+  const submitResponse=()=>{
+    if(!resp.trim())return;
+    update(det.id,{opsResponse:resp.trim(),status:"Under Review",reviewedBy:user.id,reviewedAt:today()});
+    setResp("");
+  };
+  const escalate=()=>update(det.id,{status:"Escalated to GM",escalatedAt:today(),escalatedBy:user.id});
+  const resolve=()=>update(det.id,{status:"Resolved",resolvedAt:today()});
+
+  const pending=complaints.filter(c=>c.status==="Submitted").length;
+
+  return <div className="fade">
+    <PageTitle title="Driver Complaints & Reports" sub="Review and respond to driver submissions"/>
+    {pending>0&&<Alert type="warn"><b>{pending}</b> new report{pending>1?"s":""} awaiting review.</Alert>}
+    <div style={{display:"grid",gridTemplateColumns:det?"1fr 1fr":"1fr",gap:18,alignItems:"start"}}>
+      <div>
+        {complaints.length===0&&<Card><p style={{color:C.muted,fontSize:13}}>No complaints submitted yet.</p></Card>}
+        {[...complaints].reverse().map(c=>{const[sc,sbg]=stC[c.status]||[C.muted,"#f0f2f5"];return<Card key={c.id} style={{marginBottom:12,cursor:"pointer",border:det?.id===c.id?`2px solid ${C.info}`:`1px solid ${C.border}`}} onClick={()=>setDet(c)}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+            <div>
+              <b style={{color:C.primary}}>{c.subject}</b>
+              {c.priority==="Urgent"&&<Bdg label="Urgent" color={C.danger} bg={C.dBg} border="#f5b0b0" style={{marginLeft:8}}/>}
+              <div style={{fontSize:12,color:C.muted,marginTop:3}}>{c.driverName} • {c.submittedAt}</div>
+            </div>
+            <Bdg label={c.status} color={sc} bg={sbg} border={sc+"44"}/>
+          </div>
+        </Card>;})}
+      </div>
+      {det&&<Card>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:14}}>
+          <b style={{color:C.primary,fontSize:15}}>{det.subject}</b>
+          <Btn sm v="ghost" onClick={()=>setDet(null)}>✕</Btn>
+        </div>
+        <div style={{fontSize:13,marginBottom:6}}><span style={{color:C.muted}}>From:</span> <b>{det.driverName}</b></div>
+        {det.against&&<div style={{fontSize:13,marginBottom:6}}><span style={{color:C.muted}}>Regarding:</span> <b>{det.against}</b></div>}
+        <div style={{fontSize:13,marginBottom:6}}><span style={{color:C.muted}}>Priority:</span> <b style={{color:det.priority==="Urgent"?C.danger:C.text}}>{det.priority}</b></div>
+        <div style={{background:"#f8fafd",border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px",fontSize:13,marginBottom:16,lineHeight:1.6}}>{det.message}</div>
+        {det.opsResponse&&<Alert type="info"><b>Your previous response:</b> {det.opsResponse}</Alert>}
+        {det.gmNote&&<Alert type="warn" style={{background:"#f3eef8"}}><b>GM Note:</b> {det.gmNote}</Alert>}
+        <div style={{marginBottom:12}}>
+          <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Respond / Add Note</label>
+          <textarea value={resp} onChange={e=>setResp(e.target.value)} rows={3} placeholder="Type your response..." style={{display:"block",width:"100%",marginTop:6,padding:"8px 10px",borderRadius:7,border:`1px solid ${C.border}`,fontSize:13,resize:"vertical",boxSizing:"border-box"}}/>
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <Btn v="primary" onClick={submitResponse} disabled={!resp.trim()}>📨 Send Response</Btn>
+          {det.status!=="Escalated to GM"&&det.status!=="Resolved"&&<Btn v="outline" danger onClick={escalate}>⬆️ Escalate to GM</Btn>}
+          {det.status!=="Resolved"&&<Btn v="success" onClick={resolve}>✓ Mark Resolved</Btn>}
+        </div>
+      </Card>}
+    </div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════
+   OPS — DRIVER ISSUE LOG REVIEW
+═══════════════════════════════════════ */
+function OpsIssueReview({carInfo}){
+  const {data:issues,save:saveIssues}=useData("driverIssues");
+  const [det,setDet]=useState(null);
+  const [note,setNote]=useState("");
+  const sevC={Low:[C.success,"#e6f4ec"],Moderate:[C.accent,C.wBg],High:[C.danger,C.dBg]};
+
+  const updateIssue=(id,patch)=>{saveIssues(issues.map(x=>x.id===id?{...x,...patch}:x));if(det?.id===id)setDet(d=>({...d,...patch}));};
+  const sendNote=()=>{if(!note.trim())return;updateIssue(det.id,{opsNote:note.trim(),status:"In Review"});setNote("");};
+  const resolve=()=>updateIssue(det.id,{status:"Resolved",resolvedAt:today()});
+  const open=issues.filter(i=>i.status==="Open").length;
+
+  return <div className="fade">
+    <PageTitle title="Driver Issue Log" sub="Review incidents reported by drivers"/>
+    {open>0&&<Alert type="warn"><b>{open}</b> open issue{open>1?"s":""} requiring review.</Alert>}
+    <div style={{display:"grid",gridTemplateColumns:det?"1fr 1fr":"1fr",gap:18,alignItems:"start"}}>
+      <div>
+        {issues.length===0&&<Card><p style={{color:C.muted,fontSize:13}}>No issues reported by drivers yet.</p></Card>}
+        {[...issues].reverse().map(l=>{const[sc,sbg]=sevC[l.severity]||[C.muted,"#f0f2f5"];return<Card key={l.id} style={{marginBottom:12,cursor:"pointer",border:det?.id===l.id?`2px solid ${C.info}`:`1px solid ${C.border}`}} onClick={()=>setDet(l)}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+            <div>
+              <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4}}>
+                <b style={{color:C.primary}}>{l.type}</b>
+                <Bdg label={l.severity} color={sc} bg={sbg} border={sc+"66"}/>
+                <SBdg s={l.status}/>
+              </div>
+              <div style={{fontSize:12,color:C.muted}}>{l.driverName} • {l.carNumber} • {l.date}</div>
+            </div>
+          </div>
+        </Card>;})}
+      </div>
+      {det&&<Card>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:14}}>
+          <b style={{color:C.primary,fontSize:15}}>{det.type}</b>
+          <Btn sm v="ghost" onClick={()=>setDet(null)}>✕</Btn>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14,fontSize:13}}>
+          {[["Driver",det.driverName||"—"],["Car",det.carNumber||"—"],["Date",det.date],["Severity",det.severity]].map(([l,v],i)=><div key={i}><span style={{color:C.muted}}>{l}: </span><b>{v}</b></div>)}
+        </div>
+        <div style={{background:"#f8fafd",border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px",fontSize:13,marginBottom:12,lineHeight:1.6}}>{det.desc}</div>
+        {det.receipt&&<div style={{marginBottom:12}}><ReceiptThumb value={det.receipt}/></div>}
+        {det.opsNote&&<Alert type="info"><b>Your note:</b> {det.opsNote}</Alert>}
+        <div style={{marginBottom:12}}>
+          <label style={{fontSize:12,fontWeight:600,color:C.muted}}>Add / Update Note</label>
+          <textarea value={note} onChange={e=>setNote(e.target.value)} rows={2} placeholder="Add a note for the driver..." style={{display:"block",width:"100%",marginTop:6,padding:"8px 10px",borderRadius:7,border:`1px solid ${C.border}`,fontSize:13,resize:"vertical",boxSizing:"border-box"}}/>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <Btn v="primary" onClick={sendNote} disabled={!note.trim()}>💬 Send Note</Btn>
+          {det.status!=="Resolved"&&<Btn v="success" onClick={resolve}>✓ Resolve</Btn>}
+        </div>
+      </Card>}
+    </div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════
+   GM — COMPLAINTS OVERSIGHT
+═══════════════════════════════════════ */
+function GMComplaintsOversight(){
+  const {data:complaints,save:saveComplaints}=useData("driverComplaints");
+  const {data:users}=useData("users");
+  const [det,setDet]=useState(null);
+  const [note,setNote]=useState("");
+  const stC={"Submitted":[C.info,C.iBg],"Under Review":[C.accent,C.wBg],"Escalated to GM":[C.danger,C.dBg],"Resolved":[C.success,C.sBg]};
+
+  const update=(id,patch)=>{saveComplaints(complaints.map(c=>c.id===id?{...c,...patch}:c));if(det?.id===id)setDet(d=>({...d,...patch}));};
+  const sendNote=()=>{if(!note.trim())return;update(det.id,{gmNote:note.trim(),status:det.status==="Escalated to GM"?"Escalated to GM":det.status});setNote("");};
+  const resolve=()=>update(det.id,{status:"Resolved",resolvedAt:today()});
+
+  const escalated=complaints.filter(c=>c.status==="Escalated to GM").length;
+
+  return <div className="fade">
+    <PageTitle title="Complaints & Reports Oversight" sub="All driver complaints — escalated items highlighted"/>
+    {escalated>0&&<Alert type="danger"><b>{escalated}</b> complaint{escalated>1?"s":""} escalated to GM requiring your attention.</Alert>}
+    <div style={{display:"grid",gridTemplateColumns:det?"1fr 1fr":"1fr",gap:18,alignItems:"start"}}>
+      <div>
+        {complaints.length===0&&<Card><p style={{color:C.muted,fontSize:13}}>No complaints submitted yet.</p></Card>}
+        {[...complaints].sort((a,b)=>(a.status==="Escalated to GM"?0:1)-(b.status==="Escalated to GM"?0:1)).map(c=>{const[sc,sbg]=stC[c.status]||[C.muted,"#f0f2f5"];return<Card key={c.id} style={{marginBottom:12,cursor:"pointer",border:c.status==="Escalated to GM"?`2px solid ${C.danger}`:det?.id===c.id?`2px solid ${C.info}`:`1px solid ${C.border}`}} onClick={()=>setDet(c)}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+            <div>
+              <b style={{color:C.primary}}>{c.subject}</b>
+              <div style={{fontSize:12,color:C.muted,marginTop:3}}>{c.driverName} • {c.submittedAt}</div>
+            </div>
+            <Bdg label={c.status} color={sc} bg={sbg} border={sc+"44"}/>
+          </div>
+        </Card>;})}
+      </div>
+      {det&&<Card>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:14}}>
+          <b style={{color:C.primary,fontSize:15}}>{det.subject}</b>
+          <Btn sm v="ghost" onClick={()=>setDet(null)}>✕</Btn>
+        </div>
+        <div style={{fontSize:13,marginBottom:8}}><span style={{color:C.muted}}>From:</span> <b>{det.driverName}</b></div>
+        {det.against&&<div style={{fontSize:13,marginBottom:8}}><span style={{color:C.muted}}>Regarding:</span> <b>{det.against}</b></div>}
+        <div style={{background:"#f8fafd",border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px",fontSize:13,marginBottom:12,lineHeight:1.6}}>{det.message}</div>
+        {det.opsResponse&&<Alert type="info"><b>Ops Response:</b> {det.opsResponse}</Alert>}
+        {det.gmNote&&<Alert type="warn"><b>Your Note:</b> {det.gmNote}</Alert>}
+        <div style={{marginBottom:12}}>
+          <label style={{fontSize:12,fontWeight:600,color:C.muted}}>GM Note / Decision</label>
+          <textarea value={note} onChange={e=>setNote(e.target.value)} rows={3} placeholder="Add a note or decision..." style={{display:"block",width:"100%",marginTop:6,padding:"8px 10px",borderRadius:7,border:`1px solid ${C.border}`,fontSize:13,resize:"vertical",boxSizing:"border-box"}}/>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <Btn v="primary" onClick={sendNote} disabled={!note.trim()}>📝 Save Note</Btn>
+          {det.status!=="Resolved"&&<Btn v="success" onClick={resolve}>✓ Mark Resolved</Btn>}
+        </div>
+      </Card>}
+    </div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════
+   GM — FULL EDIT: ALL DRIVER DATA
+═══════════════════════════════════════ */
+function GMDriverDataEdit({drivers,carInfo,saveCarInfo,driverSales,saveDrvSales,driverExpenses,saveDrvExp,user}){
+  return <OpsDriverSubmissions drivers={drivers} carInfo={carInfo} saveCarInfo={saveCarInfo} driverSales={driverSales} saveDriverSales={saveDrvSales} driverExpenses={driverExpenses} saveDrvExp={saveDrvExp} user={user}/>;
+}
+
+/* ═══════════════════════════════════════
+   GM — ISSUE LOG FULL VIEW
+═══════════════════════════════════════ */
+function GMIssueLogFull(){
+  const {data:issues,save:saveIssues}=useData("driverIssues");
+  const {data:users}=useData("users");
+  const [det,setDet]=useState(null);
+  const sevC={Low:[C.success,"#e6f4ec"],Moderate:[C.accent,C.wBg],High:[C.danger,C.dBg]};
+  const update=(id,patch)=>{saveIssues(issues.map(x=>x.id===id?{...x,...patch}:x));if(det?.id===id)setDet(d=>({...d,...patch}));};
+  const resolve=id=>update(id,{status:"Resolved",resolvedAt:today()});
+  const open=issues.filter(i=>i.status==="Open").length;
+  return <div className="fade">
+    <PageTitle title="Driver Issue Log" sub="All vehicle incidents reported by drivers"/>
+    {open>0&&<Alert type="warn"><b>{open}</b> open issue{open>1?"s":""} pending resolution.</Alert>}
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {issues.length===0&&<Card><p style={{color:C.muted,fontSize:13}}>No issues reported by drivers yet.</p></Card>}
+      {[...issues].reverse().map(l=>{const[sc,sbg]=sevC[l.severity]||[C.muted,"#f0f2f5"];return<Card key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16}}>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:6}}>
+            <b style={{color:C.primary}}>{l.type}</b>
+            <Bdg label={l.severity} color={sc} bg={sbg} border={sc+"66"}/>
+            <SBdg s={l.status}/>
+            <span style={{fontSize:12,color:C.muted}}>• {l.date}</span>
+          </div>
+          <div style={{fontSize:13,color:C.muted,marginBottom:3}}><b style={{color:C.text}}>{l.carNumber||"—"}</b> — {l.driverName||"—"}</div>
+          <div style={{fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:500}}>{l.desc}</div>
+          {l.receipt&&<div style={{marginTop:6}}><ReceiptThumb value={l.receipt}/></div>}
+          {l.opsNote&&<div style={{marginTop:6,padding:"6px 10px",background:C.iBg,borderRadius:6,fontSize:12,color:C.info}}><b>Ops:</b> {l.opsNote}</div>}
+        </div>
+        <div style={{display:"flex",gap:6,flexShrink:0}}>
+          {l.status!=="Resolved"&&<Btn sm v="success" onClick={()=>resolve(l.id)}>✓ Resolve</Btn>}
+          <SBdg s={l.status}/>
+        </div>
+      </Card>;})}
+    </div>
   </div>;
 }
 
