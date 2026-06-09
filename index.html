@@ -566,9 +566,10 @@ function GMSettings({brand,onSave,currentUser}){
 ═══════════════════════════════════════ */
 function GMPortal({user,onLogout,brand,onBrandUpdate}){
   const [page,setPage]=useState("dashboard");
-  const {data:users,save:saveUsers,add:addUser,update:updateUser,remove:removeUser}=useData("users");
-  const {data:carInfo}=useData("carInfo");
+  const {data:users,save:saveUsers}=useData("users");
+  const {data:carInfo,save:saveCarInfo}=useData("carInfo");
   const {data:driverSales}=useData("driverSales");
+  const {data:driverExpenses}=useData("driverExpenses");
   const {data:opsSales}=useData("opsSales");
   const {data:parts}=useData("parts");
   const {data:oil}=useData("oil");
@@ -577,17 +578,17 @@ function GMPortal({user,onLogout,brand,onBrandUpdate}){
   const {data:payments}=useData("payments");
 
   const drivers=users.filter(u=>u.role===ROLES.DRIVER);
-  const ops=users.filter(u=>u.role===ROLES.OPS);
 
   const nav=[
     {id:"dashboard",icon:"📊",label:"Dashboard"},
     {id:"finance",icon:"📈",label:"Financial Overview"},
     {section:true,label:"FLEET & PEOPLE"},
-    {id:"fleet",icon:"🚐",label:"Fleet Overview"},
+    {id:"fleet",icon:"🚐",label:"Fleet Management"},
     {id:"drivers",icon:"👷",label:"Drivers"},
     {id:"users",icon:"👥",label:"User Management"},
     {section:true,label:"OPERATIONS"},
     {id:"sales",icon:"💰",label:"All Sales"},
+    {id:"drvexpenses",icon:"🧾",label:"Driver Expenses"},
     {id:"insurance",icon:"🛡️",label:"Insurance"},
     {id:"parts",icon:"🔧",label:"Car Parts"},
     {id:"oil",icon:"🛢️",label:"Oil Records"},
@@ -598,12 +599,13 @@ function GMPortal({user,onLogout,brand,onBrandUpdate}){
   ];
 
   const pages={
-    dashboard:<GMDashboard user={user} users={users} drivers={drivers} carInfo={carInfo} driverSales={driverSales} opsSales={opsSales} parts={parts} oil={oil} insurance={insurance} logs={logs} payments={payments}/>,
-    finance:<GMFinance driverSales={driverSales} opsSales={opsSales} parts={parts} oil={oil} payments={payments}/>,
-    fleet:<GMFleet carInfo={carInfo} drivers={drivers} insurance={insurance}/>,
-    drivers:<GMDrivers drivers={drivers} carInfo={carInfo} driverSales={driverSales}/>,
+    dashboard:<GMDashboard user={user} users={users} drivers={drivers} carInfo={carInfo} driverSales={driverSales} driverExpenses={driverExpenses} opsSales={opsSales} parts={parts} oil={oil} insurance={insurance} logs={logs} payments={payments}/>,
+    finance:<GMFinance driverSales={driverSales} driverExpenses={driverExpenses} opsSales={opsSales} parts={parts} oil={oil} payments={payments}/>,
+    fleet:<GMFleet carInfo={carInfo} saveCarInfo={saveCarInfo} drivers={drivers} insurance={insurance}/>,
+    drivers:<GMDrivers drivers={drivers} carInfo={carInfo} driverSales={driverSales} driverExpenses={driverExpenses}/>,
     users:<GMUsers users={users} saveUsers={saveUsers} currentUser={user}/>,
     sales:<GMAllSales driverSales={driverSales} drivers={drivers} opsSales={opsSales}/>,
+    drvexpenses:<GMDriverExpenses driverExpenses={driverExpenses} drivers={drivers} carInfo={carInfo}/>,
     insurance:<GMInsurance insurance={insurance}/>,
     parts:<GMParts parts={parts}/>,
     oil:<GMOil oil={oil}/>,
@@ -617,14 +619,15 @@ function GMPortal({user,onLogout,brand,onBrandUpdate}){
   </Shell>;
 }
 
-function GMDashboard({users,drivers,carInfo,driverSales,opsSales,parts,oil,insurance,logs,payments}){
+function GMDashboard({users,drivers,carInfo,driverSales,driverExpenses,opsSales,parts,oil,insurance,logs,payments}){
   const thisWeek=WEEKS[0];
   const weekSales=driverSales.filter(s=>s.week===thisWeek);
   const totalRev=weekSales.reduce((a,b)=>a+Number(b.amount||0),0);
   const totalOil=oil.filter(o=>o.week===thisWeek).reduce((a,b)=>a+Number(b.total||0),0);
   const totalParts=parts.filter(p=>p.week===thisWeek).reduce((a,b)=>a+Number(b.total||0),0);
   const totalPay=payments.filter(p=>p.week===thisWeek).reduce((a,b)=>a+Number(b.amount||0),0);
-  const totalOut=totalOil+totalParts+totalPay;
+  const totalDrvExp=(driverExpenses||[]).filter(e=>e.week===thisWeek).reduce((a,b)=>a+Number(b.amount||0),0);
+  const totalOut=totalOil+totalParts+totalPay+totalDrvExp;
   const net=totalRev-totalOut;
   const expIns=insurance.filter(i=>expiryStatus(i.expiryDate)==="Expired").length;
   const soonIns=insurance.filter(i=>expiryStatus(i.expiryDate)==="Expiring Soon").length;
@@ -644,7 +647,7 @@ function GMDashboard({users,drivers,carInfo,driverSales,opsSales,parts,oil,insur
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))",gap:14,marginBottom:22}}>
       <Metric label="Total Drivers" value={drivers.length} sub="Active fleet drivers"/>
       <Metric label="Week Revenue" value={GHC(totalRev)} sub={`${weekSales.length} submissions`} color="#e9f5ee"/>
-      <Metric label="Week Expenses" value={GHC(totalOut)} sub="Oil + Parts + Payments" color="#fceaea"/>
+      <Metric label="Week Expenses" value={GHC(totalOut)} sub="Oil + Parts + Payments + Driver Exp." color="#fceaea"/>
       <Metric label="Net Profit" value={GHC(net)} sub="This week" color={net>=0?"#e9f5ee":"#fceaea"}/>
       <Metric label="Pending Approvals" value={pendingApprovals} sub="Awaiting review" color={pendingApprovals>0?C.wBg:"#f4f6f9"}/>
       <Metric label="Open Issues" value={openLogs} sub="Incidents/accidents" color={openLogs>0?C.wBg:"#f4f6f9"}/>
@@ -668,7 +671,7 @@ function GMDashboard({users,drivers,carInfo,driverSales,opsSales,parts,oil,insur
   </div>;
 }
 
-function GMFinance({driverSales,opsSales,parts,oil,payments}){
+function GMFinance({driverSales,driverExpenses,opsSales,parts,oil,payments}){
   const bRef=useRef(),charts=useRef({});
   const wks=WEEKS.slice(0,8).reverse();
   const wd=wks.map(wk=>({
@@ -676,6 +679,7 @@ function GMFinance({driverSales,opsSales,parts,oil,payments}){
     oil:oil.filter(o=>o.week===wk).reduce((a,b)=>a+Number(b.total||0),0),
     pts:parts.filter(p=>p.week===wk).reduce((a,b)=>a+Number(b.total||0),0),
     pay:payments.filter(p=>p.week===wk).reduce((a,b)=>a+Number(b.amount||0),0),
+    drvExp:(driverExpenses||[]).filter(e=>e.week===wk).reduce((a,b)=>a+Number(b.amount||0),0),
   }));
   const labs=wks.map(w=>w.replace(/\d{4}/,"").trim());
   useEffect(()=>{
@@ -683,7 +687,7 @@ function GMFinance({driverSales,opsSales,parts,oil,payments}){
     if(bRef.current){charts.current.b=new Chart(bRef.current,{type:"bar",data:{labels:labs,datasets:[{label:"Revenue",data:wd.map(d=>d.rev),backgroundColor:"rgba(26,122,74,0.8)",borderRadius:4},{label:"Total Out",data:wd.map(d=>d.oil+d.pts+d.pay),backgroundColor:"rgba(185,48,48,0.75)",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"top"}},scales:{y:{beginAtZero:true,ticks:{callback:v=>"GH₵"+v.toLocaleString()}},x:{grid:{display:false}}}}});}
     return()=>Object.values(charts.current).forEach(c=>c?.destroy());
   },[JSON.stringify(wd)]);
-  const tot=wd.reduce((a,d)=>({rev:a.rev+d.rev,out:a.out+d.oil+d.pts+d.pay}),{rev:0,out:0});
+  const tot=wd.reduce((a,d)=>({rev:a.rev+d.rev,out:a.out+d.oil+d.pts+d.pay+d.drvExp}),{rev:0,out:0});
   return <div className="fade">
     <PageTitle title="Financial Overview" sub="Revenue and expenses across all weeks"/>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))",gap:14,marginBottom:22}}>
@@ -697,29 +701,116 @@ function GMFinance({driverSales,opsSales,parts,oil,payments}){
     </Card>
     <Card>
       <SectionTitle title="Weekly Breakdown"/>
-      <div style={{overflowX:"auto"}}><table><TH cols={["Week","Revenue","Oil","Parts","Payments","Total Out","Net"]}/>
-      <tbody>{wd.slice().reverse().map((d,i)=>{const o=d.oil+d.pts+d.pay,n=d.rev-o;return<TR key={i} cells={[d.wk,<span style={{color:C.success,fontWeight:600}}>{GHC(d.rev)}</span>,GHC(d.oil),GHC(d.pts),GHC(d.pay),<span style={{color:C.danger,fontWeight:600}}>{GHC(o)}</span>,<span style={{color:n>=0?C.success:C.danger,fontWeight:700}}>{GHC(n)}</span>]}/>;})}</tbody></table></div>
+      <div style={{overflowX:"auto"}}><table><TH cols={["Week","Revenue","Oil","Parts","Payments","Driver Exp.","Total Out","Net"]}/>
+      <tbody>{wd.slice().reverse().map((d,i)=>{const o=d.oil+d.pts+d.pay+d.drvExp,n=d.rev-o;return<TR key={i} cells={[d.wk,<span style={{color:C.success,fontWeight:600}}>{GHC(d.rev)}</span>,GHC(d.oil),GHC(d.pts),GHC(d.pay),GHC(d.drvExp),<span style={{color:C.danger,fontWeight:600}}>{GHC(o)}</span>,<span style={{color:n>=0?C.success:C.danger,fontWeight:700}}>{GHC(n)}</span>]}/>;})}</tbody></table></div>
     </Card>
   </div>;
 }
 
-function GMFleet({carInfo,drivers,insurance}){
+function GMFleet({carInfo,saveCarInfo,drivers,insurance}){
+  const blank={carNumber:"",plate:"",make:"",color:"",licenseNo:"",licenseExpiry:"",roadworthyIssued:"",roadworthyExpiry:"",driverID:""};
+  const [M,setM]=useState(null),[del,setDel]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+
+  const save=()=>{
+    const d=M.data;
+    if(!d.carNumber||!d.plate)return alert("Car number and plate number are required.");
+    const exists=carInfo.find(c=>c.carNumber===d.carNumber.trim()&&c.id!==d.id);
+    if(exists)return alert("A car with that number already exists.");
+    const item={...d,carNumber:d.carNumber.trim(),updatedAt:today()};
+    let next;
+    if(M.mode==="add") next=[...carInfo,{...item,id:uid()}];
+    else next=carInfo.map(c=>c.id===d.id?{...item,id:d.id}:c);
+    saveCarInfo(next);setM(null);
+  };
+
+  const remove=id=>{saveCarInfo(carInfo.filter(c=>c.id!==id));setDel(null);};
+
+  const driverOpts=[{value:"",label:"— Unassigned —"},...drivers.filter(d=>(d.status||"active")==="active").map(d=>({value:d.id,label:`${d.name} (${d.driverID||d.username})`}))];
+
   return <div className="fade">
-    <PageTitle title="Fleet Overview" sub="All registered vehicles and their status"/>
+    <PageTitle title="Fleet Management" sub="Add, edit, assign and manage all company vehicles"
+      action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Vehicle</Btn>}/>
+
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:14,marginBottom:20}}>
+      <Metric label="Total Vehicles" value={carInfo.length} sub="In fleet"/>
+      <Metric label="Assigned" value={carInfo.filter(c=>c.driverID).length} sub="With driver" color={C.sBg}/>
+      <Metric label="Unassigned" value={carInfo.filter(c=>!c.driverID).length} sub="No driver" color={carInfo.filter(c=>!c.driverID).length>0?C.wBg:"#f4f6f9"}/>
+      <Metric label="RW Expiring" value={carInfo.filter(c=>expiryStatus(c.roadworthyExpiry)==="Expired"||expiryStatus(c.roadworthyExpiry)==="Expiring Soon").length} sub="Needs attention" color={carInfo.filter(c=>expiryStatus(c.roadworthyExpiry)!=="Active"&&expiryStatus(c.roadworthyExpiry)!=="Unknown").length>0?C.dBg:"#f4f6f9"}/>
+    </div>
+
     <Card>
-      <div style={{overflowX:"auto"}}><table><TH cols={["Car No.","Plate","Make","Driver","Roadworthy Issued","Roadworthy Expiry","RW Status","Insurance Status"]}/>
-      <tbody>{carInfo.map((c,i)=>{
+      <div style={{overflowX:"auto"}}><table><TH cols={["Car No.","Plate","Make","Colour","Assigned Driver","Licence Expiry","RW Issued","RW Expiry","RW Status","Ins. Status","Actions"]}/>
+      <tbody>{carInfo.length===0&&<TR cells={[<span style={{color:C.muted,fontStyle:"italic"}}>No vehicles yet. Click "+ Add Vehicle" to get started.</span>,...Array(10).fill("")]}/>}
+      {carInfo.map((c,i)=>{
         const drv=drivers.find(d=>d.id===c.driverID);
         const ins=insurance.find(x=>x.carNumber===c.carNumber);
         const rwSt=expiryStatus(c.roadworthyExpiry);
         const insSt=ins?expiryStatus(ins.expiryDate):"Unknown";
-        return <TR key={i} cells={[<b style={{color:C.primary}}>{c.carNumber}</b>,c.plate,c.make,drv?.name||"—",c.roadworthyIssued||"—",c.roadworthyExpiry||"—",<SBdg s={rwSt}/>,<SBdg s={insSt}/>]}/>;
+        return <TR key={i} cells={[
+          <b style={{color:C.primary}}>{c.carNumber}</b>,
+          c.plate,c.make||"—",c.color||"—",
+          drv?<span style={{color:C.success,fontWeight:600}}>{drv.name}</span>:<span style={{color:C.muted,fontSize:12}}>Unassigned</span>,
+          c.licenseExpiry||"—",c.roadworthyIssued||"—",
+          <b style={{color:rwSt==="Expired"?C.danger:rwSt==="Expiring Soon"?C.wTx:C.text}}>{c.roadworthyExpiry||"—"}</b>,
+          <SBdg s={rwSt}/>,<SBdg s={insSt}/>,
+          <ActBtns onEdit={()=>setM({mode:"edit",data:{...c}})} onDel={()=>setDel(c.id)}/>
+        ]}/>;
       })}</tbody></table></div>
     </Card>
+
+    {M&&<Modal title={M.mode==="add"?"Add New Vehicle":"Edit Vehicle"} onClose={()=>setM(null)} wide>
+      <div style={{marginBottom:16,padding:"10px 14px",background:C.iBg,borderRadius:8,fontSize:12,color:C.info}}>
+        ℹ️ Fields marked with * are required. Drivers can also update their own car details when they log in.
+      </div>
+      <FormGrid>
+        <Inp label="Car / Fleet Number" value={M.data.carNumber} onChange={f("carNumber")} req ph="e.g. BYT-006"/>
+        <Inp label="Plate Number" value={M.data.plate} onChange={f("plate")} req ph="e.g. GR-5512-24"/>
+        <Inp label="Make / Model" value={M.data.make} onChange={f("make")} ph="e.g. Toyota Sprinter"/>
+        <Inp label="Colour" value={M.data.color} onChange={f("color")} ph="e.g. White"/>
+        <Inp label="Assign Driver" value={M.data.driverID} onChange={f("driverID")} opts={driverOpts}/>
+        <Inp label="Driver's Licence No." value={M.data.licenseNo||""} onChange={f("licenseNo")} ph="e.g. GH-1234567"/>
+        <Inp label="Licence Expiry Date" value={M.data.licenseExpiry||""} onChange={f("licenseExpiry")} type="date"/>
+        <Inp label="Roadworthy Issue Date" value={M.data.roadworthyIssued||""} onChange={f("roadworthyIssued")} type="date"/>
+        <Inp label="Roadworthy Expiry Date" value={M.data.roadworthyExpiry||""} onChange={f("roadworthyExpiry")} type="date"/>
+      </FormGrid>
+      <FormFooter onCancel={()=>setM(null)} onSave={save}/>
+    </Modal>}
+    {del&&<ConfirmDel msg="Remove this vehicle from the fleet? Insurance and other records linked to this car number will remain." onConfirm={()=>remove(del)} onClose={()=>setDel(null)}/>}
   </div>;
 }
 
-function GMDrivers({drivers,carInfo,driverSales}){
+function GMDriverExpenses({driverExpenses,drivers,carInfo}){
+  const tot=(driverExpenses||[]).reduce((a,b)=>a+Number(b.amount||0),0);
+  const weeks=[...new Set((driverExpenses||[]).map(e=>e.week))];
+  return <div className="fade">
+    <PageTitle title="Driver Expenses" sub="Vehicle expenses submitted by drivers — fuel, tolls, repairs, etc."/>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:14,marginBottom:20}}>
+      <Metric label="Total Driver Expenses" value={GHC(tot)} sub="All time" color="#fceaea"/>
+      <Metric label="This Week" value={GHC((driverExpenses||[]).filter(e=>e.week===WEEKS[0]).reduce((a,b)=>a+Number(b.amount||0),0))} sub={WEEKS[0]}/>
+      <Metric label="Records" value={(driverExpenses||[]).length} sub="Expense entries"/>
+    </div>
+    {weeks.length===0&&<Card><Alert type="info">No driver expenses submitted yet. Drivers submit expenses from their portal.</Alert></Card>}
+    {weeks.map(wk=>{
+      const rows=(driverExpenses||[]).filter(e=>e.week===wk);
+      const wkTot=rows.reduce((a,b)=>a+Number(b.amount||0),0);
+      return <Card key={wk} style={{marginBottom:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <b style={{color:C.primary,fontSize:14}}>{wk}</b>
+          <span style={{color:C.danger,fontWeight:700}}>{GHC(wkTot)}</span>
+        </div>
+        <div style={{overflowX:"auto"}}><table><TH cols={["Driver","Car","Category","Description","Amount","Date"]}/>
+        <tbody>{rows.map((r,i)=>{
+          const drv=drivers.find(d=>d.id===r.driverID);
+          const car=carInfo.find(c=>c.driverID===r.driverID);
+          return <TR key={i} cells={[drv?.name||"—",car?.carNumber||r.carNumber||"—",<Bdg label={r.category} color={C.info} bg={C.iBg} border="#b5c8f0"/>,r.description||"—",<span style={{color:C.danger,fontWeight:600}}>{GHC(r.amount)}</span>,r.submittedAt||"—"]}/>;
+        })}</tbody></table></div>
+      </Card>;
+    })}
+  </div>;
+}
+
+function GMDrivers({drivers,carInfo,driverSales,driverExpenses}){
   const [sel,setSel]=useState(null);
   const driver=sel?drivers.find(d=>d.id===sel):null;
   const car=driver?carInfo.find(c=>c.driverID===driver.id):null;
@@ -977,7 +1068,10 @@ function OpsPortal({user,onLogout,brand}){
   const {data:logs,add:addLog,update:updateLog,remove:removeLog}=useData("logs");
   const {data:payments,add:addPayment,update:updatePayment,remove:removePayment}=useData("payments");
   const {data:driverSales}=useData("driverSales");
+  const {data:driverExpenses}=useData("driverExpenses");
   const {data:carInfo}=useData("carInfo");
+  const {data:users}=useData("users");
+  const drivers=users.filter(u=>u.role===ROLES.DRIVER);
 
   const nav=[
     {id:"dashboard",icon:"📊",label:"Dashboard"},
@@ -988,16 +1082,19 @@ function OpsPortal({user,onLogout,brand}){
     {id:"insurance",icon:"🛡️",label:"Insurance"},
     {id:"payments",icon:"💳",label:"Payments to Others"},
     {id:"logs",icon:"📝",label:"Report / Issue Log"},
+    {section:true,label:"VIEW"},
+    {id:"drvexpenses",icon:"🧾",label:"Driver Expenses"},
   ];
 
   const pages={
-    dashboard:<OpsDashboard driverSales={driverSales} parts={parts} oil={oil} payments={payments} insurance={insurance} logs={logs} carInfo={carInfo}/>,
+    dashboard:<OpsDashboard driverSales={driverSales} driverExpenses={driverExpenses} parts={parts} oil={oil} payments={payments} insurance={insurance} logs={logs} carInfo={carInfo}/>,
     sales:<OpsSales opsSales={opsSales} addOSale={addOSale} updateOSale={updateOSale} removeOSale={removeOSale} user={user}/>,
     parts:<OpsParts parts={parts} addPart={addPart} updatePart={updatePart} removePart={removePart} carInfo={carInfo} user={user}/>,
     oil:<OpsOil oil={oil} addOil={addOil} updateOil={updateOil} removeOil={removeOil} user={user}/>,
     insurance:<OpsInsurance insurance={insurance} addIns={addIns} updateIns={updateIns} removeIns={removeIns} carInfo={carInfo} user={user}/>,
     payments:<OpsPayments payments={payments} addPayment={addPayment} updatePayment={updatePayment} removePayment={removePayment} user={user}/>,
     logs:<OpsLogs logs={logs} addLog={addLog} updateLog={updateLog} removeLog={removeLog} carInfo={carInfo} user={user}/>,
+    drvexpenses:<GMDriverExpenses driverExpenses={driverExpenses} drivers={drivers} carInfo={carInfo}/>,
   };
 
   return <Shell user={user} onLogout={onLogout} nav={nav} activePage={page} setPage={setPage} brand={brand}>
@@ -1245,29 +1342,36 @@ function DriverPortal({user,onLogout,brand}){
   const [page,setPage]=useState("dashboard");
   const {data:carInfoAll,save:saveCarInfo}=useData("carInfo");
   const {data:salesAll,save:saveSalesAll}=useData("driverSales");
+  const {data:expAll,save:saveExpAll}=useData("driverExpenses");
 
-  // Filter to this driver only
   const myCarInfo=carInfoAll.find(c=>c.driverID===user.id)||null;
   const mySales=salesAll.filter(s=>s.driverID===user.id);
+  const myExpenses=expAll.filter(e=>e.driverID===user.id);
 
   const saveCarInfoForMe=(newInfo)=>{
     const rest=carInfoAll.filter(c=>c.driverID!==user.id);
     saveCarInfo([...rest,{...newInfo,driverID:user.id,updatedAt:today()}]);
   };
-  const addSale=item=>{saveSalesAll([...salesAll,{...item,id:uid(),driverID:user.id,submittedAt:today()}]);};
-  const updateSale=(id,item)=>{saveSalesAll(salesAll.map(s=>s.id===id?{...item,id,driverID:user.id}:s));};
-  const removeSale=id=>{saveSalesAll(salesAll.filter(s=>s.id!==id));};
+  const addSale=item=>saveSalesAll([...salesAll,{...item,id:uid(),driverID:user.id,submittedAt:today()}]);
+  const updateSale=(id,item)=>saveSalesAll(salesAll.map(s=>s.id===id?{...item,id,driverID:user.id}:s));
+  const removeSale=id=>saveSalesAll(salesAll.filter(s=>s.id!==id));
+
+  const addExpense=item=>saveExpAll([...expAll,{...item,id:uid(),driverID:user.id,carNumber:myCarInfo?.carNumber||"",submittedAt:today()}]);
+  const updateExpense=(id,item)=>saveExpAll(expAll.map(e=>e.id===id?{...item,id,driverID:user.id}:e));
+  const removeExpense=id=>saveExpAll(expAll.filter(e=>e.id!==id));
 
   const nav=[
     {id:"dashboard",icon:"📊",label:"My Dashboard"},
     {id:"carinfo",icon:"🚐",label:"My Car & Documents"},
     {id:"sales",icon:"💰",label:"My Weekly Sales"},
+    {id:"expenses",icon:"🧾",label:"My Expenses"},
   ];
 
   const pages={
-    dashboard:<DriverDashboard user={user} myCarInfo={myCarInfo} mySales={mySales}/>,
-    carinfo:<DriverCarInfo user={user} myCarInfo={myCarInfo} onSave={saveCarInfoForMe}/>,
+    dashboard:<DriverDashboard user={user} myCarInfo={myCarInfo} mySales={mySales} myExpenses={myExpenses}/>,
+    carinfo:<DriverCarInfo user={user} myCarInfo={myCarInfo} carInfoAll={carInfoAll} onSave={saveCarInfoForMe}/>,
     sales:<DriverSales user={user} mySales={mySales} addSale={addSale} updateSale={updateSale} removeSale={removeSale}/>,
+    expenses:<DriverExpenses user={user} myExpenses={myExpenses} myCarInfo={myCarInfo} addExpense={addExpense} updateExpense={updateExpense} removeExpense={removeExpense}/>,
   };
 
   return <Shell user={user} onLogout={onLogout} nav={nav} activePage={page} setPage={setPage} brand={brand}>
@@ -1275,20 +1379,22 @@ function DriverPortal({user,onLogout,brand}){
   </Shell>;
 }
 
-function DriverDashboard({user,myCarInfo,mySales}){
+function DriverDashboard({user,myCarInfo,mySales,myExpenses}){
   const totalEarned=mySales.reduce((a,b)=>a+Number(b.amount||0),0);
+  const totalExpenses=(myExpenses||[]).reduce((a,b)=>a+Number(b.amount||0),0);
   const thisWeekSale=mySales.find(s=>s.week===WEEKS[0]);
+  const thisWeekExp=(myExpenses||[]).filter(e=>e.week===WEEKS[0]).reduce((a,b)=>a+Number(b.amount||0),0);
   const rwStatus=myCarInfo?expiryStatus(myCarInfo.roadworthyExpiry):"Unknown";
   const licStatus=myCarInfo?expiryStatus(myCarInfo.licenseExpiry):"Unknown";
   return <div className="fade">
     <PageTitle title={`Welcome, ${user.name}`} sub={`Driver ID: ${user.driverID||"—"} — ${new Date().toDateString()}`}/>
     {(rwStatus==="Expired"||rwStatus==="Expiring Soon")&&<Alert type="warn">Your roadworthy certificate is <b>{rwStatus.toLowerCase()}</b> (expires {myCarInfo?.roadworthyExpiry}). Please renew urgently.</Alert>}
     {(licStatus==="Expired"||licStatus==="Expiring Soon")&&<Alert type="warn">Your driver's licence is <b>{licStatus.toLowerCase()}</b> (expires {myCarInfo?.licenseExpiry}). Please renew urgently.</Alert>}
-    {!myCarInfo&&<Alert type="info">You haven't submitted your car and document information yet. Please go to <b>My Car & Documents</b> to fill it in.</Alert>}
+    {!myCarInfo&&<Alert type="info">Your car details haven't been filled in yet. Go to <b>My Car & Documents</b> to add them, or the GM may have already created your car in the fleet.</Alert>}
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))",gap:14,marginBottom:22}}>
       <Metric label="Total Earned" value={GHC(totalEarned)} sub="All time" color="#e9f5ee"/>
       <Metric label="This Week" value={thisWeekSale?GHC(thisWeekSale.amount):"Not submitted"} sub={WEEKS[0]}/>
-      <Metric label="Sales Submitted" value={mySales.length} sub="Total weeks"/>
+      <Metric label="This Week Expenses" value={GHC(thisWeekExp)} sub="Your vehicle costs" color={thisWeekExp>0?"#fceaea":"#f4f6f9"}/>
       <Metric label="Roadworthy" value={rwStatus} sub={myCarInfo?.roadworthyExpiry||"Not set"} color={rwStatus==="Active"?C.sBg:rwStatus==="Unknown"?"#f4f6f9":C.dBg}/>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18}}>
@@ -1296,7 +1402,7 @@ function DriverDashboard({user,myCarInfo,mySales}){
         <SectionTitle title="My Vehicle"/>
         {myCarInfo?<div style={{display:"flex",flexDirection:"column",gap:10}}>
           {[["Car Number",myCarInfo.carNumber],["Plate",myCarInfo.plate],["Make",myCarInfo.make],["Licence No.",myCarInfo.licenseNo],["Licence Expiry",myCarInfo.licenseExpiry],["Roadworthy Expiry",myCarInfo.roadworthyExpiry]].map(([l,v],i)=><div key={i} style={{display:"flex",justifyContent:"space-between",borderBottom:`1px solid ${C.border}`,paddingBottom:8,fontSize:13}}><span style={{color:C.muted}}>{l}</span><b>{v||"—"}</b></div>)}
-        </div>:<p style={{color:C.muted,fontSize:13}}>No vehicle info submitted yet.</p>}
+        </div>:<p style={{color:C.muted,fontSize:13}}>No vehicle info yet. Go to <b>My Car & Documents</b>.</p>}
       </Card>
       <Card>
         <SectionTitle title="Recent Sales"/>
@@ -1308,8 +1414,10 @@ function DriverDashboard({user,myCarInfo,mySales}){
   </div>;
 }
 
-function DriverCarInfo({user,myCarInfo,onSave}){
-  const blank={carNumber:"",plate:"",make:"",color:"",licenseNo:"",licenseExpiry:"",roadworthyIssued:"",roadworthyExpiry:""};
+function DriverCarInfo({user,myCarInfo,carInfoAll,onSave}){
+  // Check if GM already created a car assigned to this driver
+  const gmAssigned=carInfoAll?carInfoAll.find(c=>c.driverID===user.id&&!c.selfRegistered):null;
+  const blank={carNumber:gmAssigned?.carNumber||"",plate:gmAssigned?.plate||"",make:gmAssigned?.make||"",color:gmAssigned?.color||"",licenseNo:"",licenseExpiry:"",roadworthyIssued:"",roadworthyExpiry:""};
   const [form,setForm]=useState(myCarInfo?{...myCarInfo}:{...blank});
   const [saved,setSaved]=useState(false);
   const f=k=>v=>setForm(p=>({...p,[k]:v}));
@@ -1317,7 +1425,7 @@ function DriverCarInfo({user,myCarInfo,onSave}){
   const licSt=expiryStatus(form.licenseExpiry);
   const save=()=>{
     if(!form.carNumber||!form.plate)return alert("Car number and plate are required.");
-    onSave(form);setSaved(true);setTimeout(()=>setSaved(false),3000);
+    onSave({...form,selfRegistered:true});setSaved(true);setTimeout(()=>setSaved(false),3000);
   };
   return <div className="fade">
     <PageTitle title="My Car & Documents" sub="Keep your vehicle information and document dates up to date"/>
@@ -1388,6 +1496,67 @@ function DriverSales({user,mySales,addSale,updateSale,removeSale}){
   </div>;
 }
 
+function DriverExpenses({user,myExpenses,myCarInfo,addExpense,updateExpense,removeExpense}){
+  const CATS=["Fuel","Tolls","Parking","Minor Repair","Cleaning","Loading Fee","Other"];
+  const blank={week:WEEKS[0],category:"Fuel",description:"",amount:""};
+  const [M,setM]=useState(null),[del,setDel]=useState(null);
+  const f=k=>v=>setM(m=>({...m,data:{...m.data,[k]:v}}));
+  const save=()=>{
+    const d=M.data;
+    if(!d.category||!d.amount)return alert("Category and amount are required.");
+    const item={...d,amount:Number(d.amount),carNumber:myCarInfo?.carNumber||""};
+    M.mode==="add"?addExpense(item):updateExpense(M.data.id,{...item,id:M.data.id});
+    setM(null);
+  };
+  const totalExp=(myExpenses||[]).reduce((a,b)=>a+Number(b.amount||0),0);
+  const weeks=[...new Set((myExpenses||[]).map(e=>e.week))];
+
+  return <div className="fade">
+    <PageTitle title="My Expenses" sub="Log vehicle expenses — fuel, tolls, repairs, etc. These are visible to the Ops Manager and GM."
+      action={<Btn onClick={()=>setM({mode:"add",data:{...blank}})}>+ Add Expense</Btn>}/>
+
+    {!myCarInfo&&<Alert type="warn">Please fill in your car details first in <b>My Car & Documents</b> so expenses can be linked to your vehicle.</Alert>}
+
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:22}}>
+      <Metric label="Total Expenses" value={GHC(totalExp)} sub="All time" color="#fceaea"/>
+      <Metric label="This Week" value={GHC((myExpenses||[]).filter(e=>e.week===WEEKS[0]).reduce((a,b)=>a+Number(b.amount||0),0))} sub={WEEKS[0]}/>
+      <Metric label="My Car" value={myCarInfo?.carNumber||"Not set"} sub={myCarInfo?.plate||""}/>
+    </div>
+
+    {weeks.length===0&&<Card><Alert type="info">No expenses logged yet. Click <b>+ Add Expense</b> to record your first vehicle expense.</Alert></Card>}
+
+    {weeks.map(wk=>{
+      const rows=(myExpenses||[]).filter(e=>e.week===wk);
+      const wkTot=rows.reduce((a,b)=>a+Number(b.amount||0),0);
+      return <Card key={wk} style={{marginBottom:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <b style={{color:C.primary,fontSize:14}}>{wk}</b>
+          <span style={{color:C.danger,fontWeight:700}}>{GHC(wkTot)}</span>
+        </div>
+        <table><TH cols={["Category","Description","Amount","Date",""]}/>
+        <tbody>{rows.map((r,i)=><TR key={i} cells={[
+          <Bdg label={r.category} color={C.info} bg={C.iBg} border="#b5c8f0"/>,
+          r.description||"—",
+          <span style={{color:C.danger,fontWeight:600}}>{GHC(r.amount)}</span>,
+          r.submittedAt||"—",
+          <ActBtns onEdit={()=>setM({mode:"edit",data:{...r,amount:String(r.amount)}})} onDel={()=>setDel(r.id)}/>
+        ]}/>)}</tbody></table>
+      </Card>;
+    })}
+
+    {M&&<Modal title={M.mode==="add"?"Add Expense":"Edit Expense"} onClose={()=>setM(null)}>
+      <FormGrid>
+        <Inp label="Week" value={M.data.week} onChange={f("week")} opts={WEEKS} req/>
+        <Inp label="Category" value={M.data.category} onChange={f("category")} opts={CATS} req/>
+        <FullCol><Inp label="Description (optional)" value={M.data.description} onChange={f("description")} ph="e.g. Fuel on Kasoa–Accra route"/></FullCol>
+        <Inp label="Amount (GH₵)" value={M.data.amount} onChange={f("amount")} type="number" req/>
+      </FormGrid>
+      <FormFooter onCancel={()=>setM(null)} onSave={save} saveLabel="Submit"/>
+    </Modal>}
+    {del&&<ConfirmDel msg="Delete this expense record?" onConfirm={()=>{removeExpense(del);setDel(null);}} onClose={()=>setDel(null)}/>}
+  </div>;
+}
+
 /* ═══════════════════════════════════════
    ROOT APP
 ═══════════════════════════════════════ */
@@ -1399,7 +1568,6 @@ function App(){
     const users=LS.get("users")||[];
     return users.find(u=>u.id===saved)||null;
   });
-
   const login=u=>{setUser(u);LS.set("session",u.id);};
   const logout=()=>{setUser(null);LS.set("session",null);};
   const updateBrand=b=>{setBrand(b);saveBrand(b);};
